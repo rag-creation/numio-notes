@@ -54,6 +54,10 @@ import com.rr.numio.notes.R
 import com.rr.numio.notes.data.TodoCodec
 import com.rr.numio.notes.data.TodoItem
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.theme.NumioAccentInk
+import com.rr.numio.notes.ui.theme.NumioCheckBorder
+import com.rr.numio.notes.ui.theme.NumioTrack
+import com.rr.numio.notes.ui.theme.NumioOnAccent
 import com.rr.numio.notes.ui.theme.NumioBackground
 import com.rr.numio.notes.ui.theme.NumioDivider
 import com.rr.numio.notes.ui.theme.NumioText
@@ -122,7 +126,7 @@ fun TodoScreen(
                 Icon(
                     painterResource(R.drawable.ic_pin),
                     if (pinned) "Unpin" else "Pin",
-                    tint = if (pinned) NumioYellow else NumioText,
+                    tint = if (pinned) NumioAccentInk else NumioText,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -180,9 +184,9 @@ fun TodoScreen(
                     .padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(painterResource(R.drawable.ic_add), null, tint = NumioYellow, modifier = Modifier.size(20.dp))
+                Icon(painterResource(R.drawable.ic_add), null, tint = NumioAccentInk, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
-                Text("Add item", color = NumioYellow, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Add item", color = NumioAccentInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -216,13 +220,13 @@ private fun TodoRow(
                     Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(NumioYellow),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(painterResource(R.drawable.ic_check), "Done", tint = Color(0xFF111111), modifier = Modifier.size(15.dp))
+                    Icon(painterResource(R.drawable.ic_check), "Done", tint = NumioOnAccent, modifier = Modifier.size(15.dp))
                 }
             } else {
                 Box(
                     Modifier
                         .size(20.dp)
-                        .border(1.5.dp, Color(0xFF6A6A6A), RoundedCornerShape(7.dp))
+                        .border(1.5.dp, NumioCheckBorder, RoundedCornerShape(7.dp))
                 )
             }
         }
@@ -249,7 +253,7 @@ private fun TodoRow(
 @Composable
 private fun ProgressBar(done: Int, total: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF2A2A2A))) {
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(NumioTrack)) {
             Box(
                 Modifier
                     .fillMaxWidth(done.toFloat() / total)

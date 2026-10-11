@@ -4,7 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rr.numio.notes.data.AppSettings
+import com.rr.numio.notes.ui.theme.Palettes
+import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,8 +30,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val appSettings = AppSettings(applicationContext)
         setContent {
-            NotesbyNumioTheme {
+            // Wait for the saved theme (a few ms) so a light theme never flashes dark first
+            val mode by appSettings.mode.collectAsState(initial = null)
+            val themeId by appSettings.theme.collectAsState(initial = null)
+            val m = mode ?: return@setContent
+            val t = themeId ?: return@setContent
+            val palette = Palettes.resolve(t, m, isSystemInDarkTheme())
+            val scope = rememberCoroutineScope()
+
+            // Status and navigation bar icons dark on light themes, white on dark ones
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = palette.isLight
+                    isAppearanceLightNavigationBars = palette.isLight
+                }
+            }
+
+            NotesbyNumioTheme(palette) {
                 val nav = rememberNavController()
                 val notesViewModel: NotesViewModel = viewModel()
 
@@ -59,7 +85,13 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("settings") {
-                        SettingsScreen(onBack = { nav.popBackStack() })
+                        SettingsScreen(
+                            mode = m,
+                            themeId = t,
+                            onModeChange = { scope.launch { appSettings.setMode(it) } },
+                            onThemeChange = { scope.launch { appSettings.setTheme(it) } },
+                            onBack = { nav.popBackStack() },
+                        )
                     }
                 }
             }

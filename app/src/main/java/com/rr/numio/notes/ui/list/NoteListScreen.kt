@@ -7,7 +7,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.rr.numio.notes.ui.theme.LocalNotesPalette
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,6 +67,13 @@ import androidx.compose.ui.unit.sp
 import com.rr.numio.notes.R
 import com.rr.numio.notes.data.Note
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.theme.NumioAccentInk
+import com.rr.numio.notes.ui.theme.NumioTextBody
+import com.rr.numio.notes.ui.theme.NumioCheckBorder
+import com.rr.numio.notes.ui.theme.NumioAccentSoft
+import com.rr.numio.notes.ui.theme.NumioTrack
+import com.rr.numio.notes.ui.theme.NumioRaised
+import com.rr.numio.notes.ui.theme.NumioOnAccent
 import com.rr.numio.notes.ui.theme.NumioBackground
 import com.rr.numio.notes.ui.theme.NumioButton
 import com.rr.numio.notes.ui.theme.NumioCard
@@ -157,8 +173,8 @@ fun NoteListScreen(
             }
             FloatingActionButton(
                 onClick = { menuOpen = !menuOpen },
-                containerColor = if (menuOpen) Color(0xFF2A2A2A) else NumioYellow,
-                contentColor = if (menuOpen) NumioYellow else Color(0xFF111111),
+                containerColor = if (menuOpen) NumioTrack else NumioYellow,
+                contentColor = if (menuOpen) NumioAccentInk else NumioOnAccent,
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.size(60.dp),
             ) {
@@ -179,7 +195,7 @@ private fun MenuPill(icon: Int, label: String, primary: Boolean = false, onClick
         Modifier
             .height(52.dp)
             .clip(RoundedCornerShape(26.dp))
-            .background(if (primary) NumioYellow else Color(0xFF1F1F1F))
+            .background(if (primary) NumioYellow else NumioRaised)
             .clickable(onClick = onClick)
             .padding(start = 10.dp, end = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -188,20 +204,20 @@ private fun MenuPill(icon: Int, label: String, primary: Boolean = false, onClick
             Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(if (primary) Color(0x1F000000) else Color(0xFF2A2410)),
+                .background(if (primary) Color(0x1F000000) else NumioAccentSoft),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painterResource(icon),
                 null,
-                tint = if (primary) Color(0xFF111111) else NumioYellow,
+                tint = if (primary) NumioOnAccent else NumioAccentInk,
                 modifier = Modifier.size(17.dp),
             )
         }
         Spacer(Modifier.width(12.dp))
         Text(
             label,
-            color = if (primary) Color(0xFF111111) else NumioText,
+            color = if (primary) NumioOnAccent else NumioText,
             fontSize = 15.sp,
             fontWeight = if (primary) FontWeight.ExtraBold else FontWeight.Bold,
         )
@@ -228,23 +244,60 @@ private fun TopBar(onSearch: () -> Unit, onLayout: () -> Unit, onSettings: () ->
                     .background(NumioYellow, RoundedCornerShape(2.dp))
             )
         }
-        RoundIcon(R.drawable.ic_search, "Search", onSearch)
+        RoundButton("Search", onSearch) { SearchGlyph() }
         Spacer(Modifier.width(4.dp))
-        RoundIcon(R.drawable.ic_layout, "Layout", onLayout)
+        RoundButton("Layout", onLayout) { LayoutGlyph() }
         Spacer(Modifier.width(4.dp))
-        RoundIcon(R.drawable.ic_settings, "Settings", onSettings)
+        // The N. gear has its own cream and yellow, so it keeps a dark badge on light themes
+        val palette = LocalNotesPalette.current
+        RoundButton("Settings", onSettings, background = if (palette.isLight) Color(0xFF1C1C1C) else NumioButton) {
+            Icon(painterResource(R.drawable.ic_settings), null, tint = Color.Unspecified, modifier = Modifier.size(21.dp))
+        }
     }
 }
 
-// Icons keep their own colours (white + Numio yellow), so no tint
 @Composable
-private fun RoundIcon(icon: Int, label: String, onClick: () -> Unit) {
+private fun RoundButton(
+    label: String,
+    onClick: () -> Unit,
+    background: Color = NumioButton,
+    content: @Composable () -> Unit,
+) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(44.dp),
-        colors = IconButtonDefaults.iconButtonColors(containerColor = NumioButton),
-    ) {
-        Icon(painterResource(icon), contentDescription = label, tint = Color.Unspecified, modifier = Modifier.size(21.dp))
+        modifier = Modifier.size(44.dp).semantics { contentDescription = label },
+        colors = IconButtonDefaults.iconButtonColors(containerColor = background),
+    ) { content() }
+}
+
+// Search: ring and neck in the text colour, thick handle in the accent
+@Composable
+private fun SearchGlyph() {
+    val ink = NumioText
+    val accent = NumioYellow
+    Canvas(Modifier.size(22.dp)) {
+        val u = size.width / 24f
+        drawCircle(ink, radius = 6f * u, center = Offset(9.5f * u, 9.5f * u), style = Stroke(2.2f * u))
+        drawLine(ink, Offset(13.8f * u, 13.8f * u), Offset(15.4f * u, 15.4f * u), strokeWidth = 1.3f * u)
+        drawLine(accent, Offset(16.6f * u, 16.6f * u), Offset(20.2f * u, 20.2f * u), strokeWidth = 3.4f * u, cap = StrokeCap.Round)
+    }
+}
+
+// Layout: two tall boxes in the text colour, two small ones in the accent
+@Composable
+private fun LayoutGlyph() {
+    val ink = NumioText
+    val accent = NumioYellow
+    Canvas(Modifier.size(21.dp)) {
+        val u = size.width / 24f
+        fun box(x: Float, y: Float, w: Float, h: Float, c: Color) = drawRoundRect(
+            c, topLeft = Offset(x * u, y * u), size = Size(w * u, h * u),
+            cornerRadius = CornerRadius(2f * u), style = Stroke(2f * u),
+        )
+        box(4f, 4f, 7f, 9f, ink)
+        box(13f, 4f, 7f, 5f, accent)
+        box(4f, 15f, 7f, 5f, accent)
+        box(13f, 11f, 7f, 9f, ink)
     }
 }
 
@@ -261,9 +314,9 @@ private fun NoteCard(note: Note, onClick: () -> Unit, onToggleItem: (Long) -> Un
     ) {
         if (note.pinned) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_pin), null, tint = NumioYellow, modifier = Modifier.size(12.dp))
+                Icon(painterResource(R.drawable.ic_pin), null, tint = NumioAccentInk, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("PINNED", color = NumioYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                Text("PINNED", color = NumioAccentInk, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
             }
         }
         if (note.title.isNotBlank()) {
@@ -298,15 +351,15 @@ private fun TodoPreview(note: Note, onToggleItem: (Long) -> Unit) {
                         Modifier.size(16.dp).clip(RoundedCornerShape(5.dp)).background(NumioYellow),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(painterResource(R.drawable.ic_check), null, tint = Color(0xFF111111), modifier = Modifier.size(11.dp))
+                        Icon(painterResource(R.drawable.ic_check), null, tint = NumioOnAccent, modifier = Modifier.size(11.dp))
                     }
                 } else {
-                    Box(Modifier.size(15.dp).border(1.5.dp, Color(0xFF6A6A6A), RoundedCornerShape(5.dp)))
+                    Box(Modifier.size(15.dp).border(1.5.dp, NumioCheckBorder, RoundedCornerShape(5.dp)))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     item.text,
-                    color = if (item.done) NumioTextFaint else Color(0xFFD6D6D6),
+                    color = if (item.done) NumioTextFaint else NumioTextBody,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -319,7 +372,7 @@ private fun TodoPreview(note: Note, onToggleItem: (Long) -> Unit) {
         }
         val done = items.count { it.done }
         Spacer(Modifier.height(4.dp))
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF2A2A2A))) {
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(NumioTrack)) {
             Box(Modifier.fillMaxWidth(done.toFloat() / items.size).height(4.dp).background(NumioYellow))
         }
     }

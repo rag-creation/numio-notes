@@ -45,6 +45,8 @@ import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.rr.numio.notes.R
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.theme.NumioAccentInk
+import com.rr.numio.notes.ui.theme.NumioAccentSoft
 import com.rr.numio.notes.ui.theme.NumioBackground
 import com.rr.numio.notes.ui.theme.NumioButton
 import com.rr.numio.notes.ui.theme.NumioDivider
@@ -102,7 +104,7 @@ fun EditorScreen(
                 Icon(
                     painterResource(R.drawable.ic_pin),
                     if (pinned) "Unpin" else "Pin",
-                    tint = if (pinned) NumioYellow else NumioText,
+                    tint = if (pinned) NumioAccentInk else NumioText,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -186,11 +188,11 @@ private fun FormatButton(
         modifier = Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(if (active) Color(0xFF2A2410) else Color.Transparent),
+            .background(if (active) NumioAccentSoft else Color.Transparent),
     ) {
         Text(
             label,
-            color = if (active) NumioYellow else NumioText,
+            color = if (active) NumioAccentInk else NumioText,
             fontSize = 17.sp,
             fontWeight = weight,
             fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
