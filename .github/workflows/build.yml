@@ -40,7 +40,16 @@ jobs:
           NUMIO_KEY_PASSWORD: ${{ secrets.NUMIO_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
+
+      # On failure, turn the first error lines into annotations so they show on the run page.
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E "^e: |What went wrong|> |error:|Could not" build.log | head -25 | while IFS= read -r line; do
+            echo "::error::${line//%/%25}"
+          done
 
       - name: Name the APK
         run: |
