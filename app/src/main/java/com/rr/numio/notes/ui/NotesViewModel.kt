@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rr.numio.notes.data.Note
 import com.rr.numio.notes.data.NotesDatabase
+import com.rr.numio.notes.data.TodoCodec
+import com.rr.numio.notes.data.TodoItem
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -36,6 +38,36 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                     updatedAt = System.currentTimeMillis(),
                 )
             )
+        }
+    }
+
+    // Called when leaving the to-do screen. Empty new lists are not saved.
+    fun saveTodo(id: Long, title: String, items: List<TodoItem>, pinned: Boolean, notebook: String) {
+        val kept = items.filter { it.text.isNotBlank() }
+        if (id == 0L && title.isBlank() && kept.isEmpty()) return
+        viewModelScope.launch {
+            dao.upsert(
+                Note(
+                    id = id,
+                    title = title.trim(),
+                    contentHtml = TodoCodec.encode(kept),
+                    preview = kept.joinToString(", ") { it.text }.take(200),
+                    notebook = notebook,
+                    pinned = pinned,
+                    updatedAt = System.currentTimeMillis(),
+                    isTodo = true,
+                )
+            )
+        }
+    }
+
+    // Ticking an item straight from the list card
+    fun toggleTodoItem(note: Note, itemId: Long) {
+        val items = TodoCodec.decode(note.contentHtml).map {
+            if (it.id == itemId) it.copy(done = !it.done) else it
+        }
+        viewModelScope.launch {
+            dao.upsert(note.copy(contentHtml = TodoCodec.encode(items), updatedAt = System.currentTimeMillis()))
         }
     }
 

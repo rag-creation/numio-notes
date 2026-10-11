@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rr.numio.notes.ui.NotesViewModel
 import com.rr.numio.notes.ui.editor.EditorScreen
+import com.rr.numio.notes.ui.editor.TodoScreen
 import com.rr.numio.notes.ui.list.NoteListScreen
 import com.rr.numio.notes.ui.settings.SettingsScreen
 import com.rr.numio.notes.ui.theme.NotesbyNumioTheme
@@ -29,8 +30,11 @@ class MainActivity : ComponentActivity() {
                     composable("list") {
                         NoteListScreen(
                             viewModel = notesViewModel,
-                            onOpenNote = { id -> nav.navigate("editor/$id") },
+                            onOpenNote = { note ->
+                                nav.navigate(if (note.isTodo) "todo/${note.id}" else "editor/${note.id}")
+                            },
                             onNewNote = { nav.navigate("editor/0") },
+                            onNewTodo = { nav.navigate("todo/0") },
                             onOpenSettings = { nav.navigate("settings") },
                         )
                     }
@@ -39,6 +43,16 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("id") { type = NavType.LongType }),
                     ) { entry ->
                         EditorScreen(
+                            noteId = entry.arguments?.getLong("id") ?: 0L,
+                            viewModel = notesViewModel,
+                            onDone = { nav.popBackStack() },
+                        )
+                    }
+                    composable(
+                        "todo/{id}",
+                        arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                    ) { entry ->
+                        TodoScreen(
                             noteId = entry.arguments?.getLong("id") ?: 0L,
                             viewModel = notesViewModel,
                             onDone = { nav.popBackStack() },

@@ -1,7 +1,16 @@
 package com.rr.numio.notes.ui.list
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +39,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
+import com.rr.numio.notes.data.TodoCodec
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,13 +72,17 @@ import java.util.Locale
 @Composable
 fun NoteListScreen(
     viewModel: NotesViewModel,
-    onOpenNote: (Long) -> Unit,
+    onOpenNote: (Note) -> Unit,
     onNewNote: () -> Unit,
+    onNewTodo: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val context = LocalContext.current
     val notes by viewModel.notes.collectAsState()
     // 2 columns (staggered) or 1 column list, switched by the layout button
     var columns by remember { mutableIntStateOf(2) }
+    var menuOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = menuOpen) { menuOpen = false }
 
     Box(
         Modifier
@@ -91,25 +108,103 @@ fun NoteListScreen(
                     verticalItemSpacing = 10.dp,
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteCard(note = note, onClick = { onOpenNote(note.id) })
+                        NoteCard(
+                            note = note,
+                            onClick = { onOpenNote(note) },
+                            onToggleItem = { itemId -> viewModel.toggleTodoItem(note, itemId) },
+                        )
                     }
                 }
             }
         }
 
-        FloatingActionButton(
-            onClick = onNewNote,
-            containerColor = NumioYellow,
-            contentColor = Color(0xFF111111),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
+        // Dim the list while the + menu is open; tap outside to close
+        AnimatedVisibility(visible = menuOpen, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xB8000000))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { menuOpen = false }
+            )
+        }
+
+        Column(
+            Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(20.dp)
-                .size(60.dp),
+                .padding(20.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Icon(painterResource(R.drawable.ic_add), contentDescription = "New note", modifier = Modifier.size(26.dp))
+            AnimatedVisibility(
+                visible = menuOpen,
+                enter = fadeIn() + slideInVertically { it / 4 },
+                exit = fadeOut() + slideOutVertically { it / 4 },
+            ) {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    MenuPill(R.drawable.ic_mic, "Voice") {
+                        Toast.makeText(context, "Voice notes are coming soon", Toast.LENGTH_SHORT).show()
+                    }
+                    MenuPill(R.drawable.ic_camera, "Camera") {
+                        Toast.makeText(context, "Photo notes are coming soon", Toast.LENGTH_SHORT).show()
+                    }
+                    MenuPill(R.drawable.ic_todo, "New to-do") { menuOpen = false; onNewTodo() }
+                    MenuPill(R.drawable.ic_note, "New note", primary = true) { menuOpen = false; onNewNote() }
+                }
+            }
+            FloatingActionButton(
+                onClick = { menuOpen = !menuOpen },
+                containerColor = if (menuOpen) Color(0xFF2A2A2A) else NumioYellow,
+                contentColor = if (menuOpen) NumioYellow else Color(0xFF111111),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.size(60.dp),
+            ) {
+                Icon(
+                    painterResource(if (menuOpen) R.drawable.ic_close else R.drawable.ic_add),
+                    contentDescription = if (menuOpen) "Close menu" else "New",
+                    modifier = Modifier.size(if (menuOpen) 24.dp else 26.dp),
+                )
+            }
         }
+    }
+}
+
+// One option in the + menu: icon in a small circle, then the label
+@Composable
+private fun MenuPill(icon: Int, label: String, primary: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(if (primary) NumioYellow else Color(0xFF1F1F1F))
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(if (primary) Color(0x1F000000) else Color(0xFF2A2410)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painterResource(icon),
+                null,
+                tint = if (primary) Color(0xFF111111) else NumioYellow,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            label,
+            color = if (primary) Color(0xFF111111) else NumioText,
+            fontSize = 15.sp,
+            fontWeight = if (primary) FontWeight.ExtraBold else FontWeight.Bold,
+        )
     }
 }
 
@@ -154,7 +249,7 @@ private fun RoundIcon(icon: Int, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun NoteCard(note: Note, onClick: () -> Unit) {
+private fun NoteCard(note: Note, onClick: () -> Unit, onToggleItem: (Long) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -174,10 +269,59 @@ private fun NoteCard(note: Note, onClick: () -> Unit) {
         if (note.title.isNotBlank()) {
             Text(note.title, color = NumioText, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        if (note.preview.isNotBlank()) {
+        if (note.isTodo) {
+            TodoPreview(note, onToggleItem)
+        } else if (note.preview.isNotBlank()) {
             Text(note.preview, color = NumioTextSoft, fontSize = 13.sp, lineHeight = 19.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
         }
         Text("${formatDate(note.updatedAt)} · ${note.notebook}", color = NumioTextFaint, fontSize = 11.sp)
+    }
+}
+
+// First few items of a to-do note, tickable right on the card, plus progress
+@Composable
+private fun TodoPreview(note: Note, onToggleItem: (Long) -> Unit) {
+    val items = remember(note.contentHtml) { TodoCodec.decode(note.contentHtml) }
+    if (items.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        items.take(5).forEach { item ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onToggleItem(item.id) }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (item.done) {
+                    Box(
+                        Modifier.size(16.dp).clip(RoundedCornerShape(5.dp)).background(NumioYellow),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(painterResource(R.drawable.ic_check), null, tint = Color(0xFF111111), modifier = Modifier.size(11.dp))
+                    }
+                } else {
+                    Box(Modifier.size(15.dp).border(1.5.dp, Color(0xFF6A6A6A), RoundedCornerShape(5.dp)))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    item.text,
+                    color = if (item.done) NumioTextFaint else Color(0xFFD6D6D6),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                )
+            }
+        }
+        if (items.size > 5) {
+            Text("+${items.size - 5} more", color = NumioTextFaint, fontSize = 12.sp)
+        }
+        val done = items.count { it.done }
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF2A2A2A))) {
+            Box(Modifier.fillMaxWidth(done.toFloat() / items.size).height(4.dp).background(NumioYellow))
+        }
     }
 }
 
