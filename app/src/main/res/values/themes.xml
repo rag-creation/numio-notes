@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NotesbyNumio" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/numio_bg</item>
+    </style>
+    <color name="numio_bg">#FF0F0F0F</color>
+</resources>
