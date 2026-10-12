@@ -86,6 +86,9 @@ fun EditorScreen(
         richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2002\u200A", "◦\u2002\u200A", "▪\u2002\u200A")
         // Markers keep the plain style: no bold, italic or underlined numbers
         richState.config.listMarkerStyleBehavior = ListMarkerStyleBehavior.AlwaysDefault
+        // A new line starts plain. Carrying bold onto the next line was buggy in the editor
+        // library (turning B off on that line had no effect), so each line starts clean.
+        richState.config.preserveStyleOnEmptyLine = false
         // Every marker starts at the same left edge (1. and 10. line up on the left)
         richState.config.listPrefixAlignment = ListPrefixAlignment.Start
     }
