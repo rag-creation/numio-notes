@@ -54,7 +54,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.text.TextRange
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.rr.numio.notes.R
 import com.rr.numio.notes.ui.NotesViewModel
@@ -86,9 +89,8 @@ fun EditorScreen(
         richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2002\u200A", "◦\u2002\u200A", "▪\u2002\u200A")
         // Markers keep the plain style: no bold, italic or underlined numbers
         richState.config.listMarkerStyleBehavior = ListMarkerStyleBehavior.AlwaysDefault
-        // A new line starts plain. Carrying bold onto the next line was buggy in the editor
-        // library (turning B off on that line had no effect), so each line starts clean.
-        richState.config.preserveStyleOnEmptyLine = false
+        // The next line keeps the style you were typing with
+        richState.config.preserveStyleOnEmptyLine = true
         // Every marker starts at the same left edge (1. and 10. line up on the left)
         richState.config.listPrefixAlignment = ListPrefixAlignment.Start
     }
@@ -96,6 +98,44 @@ fun EditorScreen(
     var pinned by remember { mutableStateOf(false) }
     var notebook by remember { mutableStateOf("Personal") }
     var loaded by remember { mutableStateOf(noteId == 0L) }
+
+    // What B / I / U were set to, and from which text position. Keyboards send a word that is
+    // still being typed as a "replace the whole word" on every key, and the editor library then
+    // restyles the word like the text before it, losing the change. So we re-apply it.
+    var styleFrom by remember { mutableStateOf<Int?>(null) }
+    var wanted by remember { mutableStateOf(Marks()) }
+
+    LaunchedEffect(richState) {
+        var lastText = richState.annotatedString.text
+        snapshotFlow { richState.annotatedString.text to richState.selection }.collect { (text, sel) ->
+            val from = styleFrom
+            if (from != null) {
+                when {
+                    // Cursor moved without typing: the pick only applies where it was made
+                    text == lastText -> styleFrom = null
+                    !sel.collapsed || sel.min < from -> styleFrom = null
+                    text.substring(from, sel.min.coerceAtMost(text.length)).contains('\n') ->
+                        // New line: the editor carries the style over by itself
+                        styleFrom = null
+                    sel.min > from -> applyMarks(richState, TextRange(from, sel.min), wanted)
+                }
+            }
+            lastText = text
+        }
+    }
+
+    fun toggle(kind: Mark) {
+        val sel = richState.selection
+        val current = styleFrom?.takeIf { sel.collapsed && sel.min >= it }?.let { wanted }
+            ?: richState.currentSpanStyle.toMarks()
+        richState.toggleSpanStyle(kind.spanStyle)
+        if (sel.collapsed) {
+            wanted = current.toggled(kind)
+            styleFrom = sel.min
+        } else {
+            styleFrom = null
+        }
+    }
 
     LaunchedEffect(noteId) {
         viewModel.load(noteId)?.let { n ->
@@ -185,16 +225,11 @@ fun EditorScreen(
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            val span = richState.currentSpanStyle
-            FormatButton("B", span.fontWeight == FontWeight.Bold, FontWeight.ExtraBold) {
-                richState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
-            }
-            FormatButton("I", span.fontStyle == FontStyle.Italic, FontWeight.SemiBold, italic = true) {
-                richState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
-            }
-            FormatButton("U", span.textDecoration?.contains(TextDecoration.Underline) == true, FontWeight.SemiBold, underline = true) {
-                richState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
-            }
+            val shown = styleFrom?.takeIf { richState.selection.collapsed }?.let { wanted }
+                ?: richState.currentSpanStyle.toMarks()
+            FormatButton("B", shown.bold, FontWeight.ExtraBold) { toggle(Mark.Bold) }
+            FormatButton("I", shown.italic, FontWeight.SemiBold, italic = true) { toggle(Mark.Italic) }
+            FormatButton("U", shown.underline, FontWeight.SemiBold, underline = true) { toggle(Mark.Underline) }
             FormatButton("•", richState.isUnorderedList, FontWeight.ExtraBold) {
                 richState.toggleUnorderedList()
             }
@@ -212,6 +247,36 @@ fun EditorScreen(
                 richState.addParagraphStyle(ParagraphStyle(textAlign = next))
             }
         }
+    }
+}
+
+private enum class Mark(val spanStyle: SpanStyle) {
+    Bold(SpanStyle(fontWeight = FontWeight.Bold)),
+    Italic(SpanStyle(fontStyle = FontStyle.Italic)),
+    Underline(SpanStyle(textDecoration = TextDecoration.Underline)),
+}
+
+private data class Marks(val bold: Boolean = false, val italic: Boolean = false, val underline: Boolean = false) {
+    fun has(m: Mark) = when (m) { Mark.Bold -> bold; Mark.Italic -> italic; Mark.Underline -> underline }
+    fun toggled(m: Mark) = when (m) {
+        Mark.Bold -> copy(bold = !bold)
+        Mark.Italic -> copy(italic = !italic)
+        Mark.Underline -> copy(underline = !underline)
+    }
+}
+
+private fun SpanStyle.toMarks() = Marks(
+    bold = fontWeight == FontWeight.Bold,
+    italic = fontStyle == FontStyle.Italic,
+    underline = textDecoration?.contains(TextDecoration.Underline) == true,
+)
+
+// Make the text in `range` match the wanted B / I / U, touching only what differs
+private fun applyMarks(state: RichTextState, range: TextRange, wanted: Marks) {
+    val chars = (range.min until range.max).map { state.getSpanStyle(TextRange(it, it + 1)).toMarks() }
+    Mark.entries.forEach { m ->
+        if (wanted.has(m) && !chars.all { it.has(m) }) state.addSpanStyle(m.spanStyle, range)
+        if (!wanted.has(m) && chars.any { it.has(m) }) state.removeSpanStyle(m.spanStyle, range)
     }
 }
 
