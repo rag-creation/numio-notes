@@ -226,11 +226,11 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                 buildString {
                     append(if (rows.size == 1) "Imported 1 note" else "Imported ${rows.size} notes")
                     if (books > 0) append(if (books == 1) " into 1 notebook" else " into $books notebooks")
-                    if (encrypted > 0) append(". Skipped $encrypted encrypted (turn off encryption in Joplin first)")
+                    if (encrypted > 0) append(". Skipped $encrypted encrypted notes (turn off encryption before exporting)")
                     append(".")
                 }
             }
-            _importState.value = result.getOrElse { "Couldn't read that file. Supported: Joplin .jex, Google Keep Takeout .zip or .json, .txt and .md files." }
+            _importState.value = result.getOrElse { "Couldn't read that file. It needs to be a Takeout .zip, .txt, .md or .jex file." }
         }
     }
 

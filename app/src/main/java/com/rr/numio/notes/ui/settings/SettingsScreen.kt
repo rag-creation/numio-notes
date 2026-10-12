@@ -1,6 +1,9 @@
 package com.rr.numio.notes.ui.settings
 
 import android.content.Intent
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +84,7 @@ fun SettingsScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) onImport(uris)
     }
+    var choosingSource by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val version = remember {
         runCatching {
@@ -138,20 +142,10 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 SectionLabel("Import")
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
-                    SettingRow("Import notes", "Joplin, Google Keep, Samsung Notes, Markdown") {
-                        picker.launch(arrayOf("*/*"))
+                    SettingRow("Bring your notes in", "From another app or from files") {
+                        choosingSource = true
                     }
                 }
-                Text(
-                    "Joplin: File → Export all → JEX\n" +
-                        "Google Keep: takeout.google.com → Keep → the .zip\n" +
-                        "Samsung Notes: select notes → Save as file → Text file\n" +
-                        "Other apps: .md or .txt files",
-                    color = NumioTextFaint,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-                )
                 if (importState != null) {
                     Text(
                         importState,
@@ -196,6 +190,56 @@ fun SettingsScreen(
         }
 
         if (showEgg) EasterEgg(onClose = { showEgg = false })
+
+        if (choosingSource) {
+            ImportSourceSheet(
+                onPick = { choosingSource = false; picker.launch(arrayOf("*/*")) },
+                onDismiss = { choosingSource = false },
+            )
+        }
+    }
+}
+
+// Where are the notes coming from? Every choice opens the same file picker;
+// the app reads the file by its type.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ImportSourceSheet(onPick: () -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = NumioCard,
+        contentColor = NumioText,
+        dragHandle = {
+            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(NumioDivider))
+        },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(start = 8.dp, end = 8.dp, bottom = 16.dp)) {
+            Text(
+                "Bring your notes in",
+                color = NumioText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            )
+            SourceRow("Google Keep", "Download Keep from Google Takeout, then pick the .zip", onPick)
+            SourceRow("Samsung Notes", "Select notes, save them as text files, then pick them", onPick)
+            SourceRow("Apple Notes and others", "Text or Markdown files (.txt, .md)", onPick)
+            SourceRow("Export file", "A .jex file", onPick)
+        }
+    }
+}
+
+@Composable
+private fun SourceRow(title: String, hint: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+    ) {
+        Text(title, color = NumioText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(hint, color = NumioTextFaint, fontSize = 13.sp)
     }
 }
 

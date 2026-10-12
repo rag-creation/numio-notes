@@ -58,7 +58,7 @@ object JoplinImport {
             ImportedNote(
                 title = item["_title"].orEmpty().trim(),
                 markdown = cleanMarkdown(item["_body"].orEmpty()),
-                notebook = folders[item["parent_id"]]?.trim()?.ifBlank { null } ?: "Joplin",
+                notebook = folders[item["parent_id"]]?.trim()?.ifBlank { null } ?: "Imported",
                 updatedAt = parseTime(item["updated_time"]) ?: System.currentTimeMillis(),
             )
         }
