@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.mohamedrejeb.richeditor.annotation.ExperimentalRichTextApi
+import com.mohamedrejeb.richeditor.paragraph.type.ListMarkerStyleBehavior
 import com.mohamedrejeb.richeditor.paragraph.type.ListPrefixAlignment
 import com.mohamedrejeb.richeditor.paragraph.type.OrderedListStyleType
 import com.mohamedrejeb.richeditor.paragraph.type.UnorderedListStyleType
@@ -80,7 +81,11 @@ fun EditorScreen(
     LaunchedEffect(Unit) {
         richState.config.listIndent = 34
         richState.config.orderedListStyleType = NotesNumbering
-        richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2009", "◦\u2009", "▪\u2009")
+        // Bullet + en space + hair space + the editor's own space = exactly the width of "1." + en space
+        // (Inter, equal-width digits), so bullet text starts where numbered text starts
+        richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2002\u200A", "◦\u2002\u200A", "▪\u2002\u200A")
+        // Markers keep the plain style: no bold, italic or underlined numbers
+        richState.config.listMarkerStyleBehavior = ListMarkerStyleBehavior.AlwaysDefault
         // Every marker starts at the same left edge (1. and 10. line up on the left)
         richState.config.listPrefixAlignment = ListPrefixAlignment.Start
     }
