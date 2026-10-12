@@ -8,6 +8,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.style.TextAlign
+import com.mohamedrejeb.richeditor.annotation.ExperimentalRichTextApi
+import com.mohamedrejeb.richeditor.paragraph.type.ListPrefixAlignment
 import com.mohamedrejeb.richeditor.paragraph.type.OrderedListStyleType
 import com.mohamedrejeb.richeditor.paragraph.type.UnorderedListStyleType
 import com.rr.numio.notes.ui.theme.NotesFont
@@ -64,6 +66,7 @@ import com.rr.numio.notes.ui.theme.NumioText
 import com.rr.numio.notes.ui.theme.NumioTextFaint
 import com.rr.numio.notes.ui.theme.NumioYellow
 
+@OptIn(ExperimentalRichTextApi::class)
 @Composable
 fun EditorScreen(
     noteId: Long,
@@ -78,6 +81,8 @@ fun EditorScreen(
         richState.config.listIndent = 34
         richState.config.orderedListStyleType = NotesNumbering
         richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2009", "◦\u2009", "▪\u2009")
+        // Every marker starts at the same left edge (1. and 10. line up on the left)
+        richState.config.listPrefixAlignment = ListPrefixAlignment.Start
     }
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
@@ -154,7 +159,7 @@ fun EditorScreen(
                 }
                 BasicRichTextEditor(
                     state = richState,
-                    textStyle = TextStyle(color = NumioText, fontSize = 16.sp, lineHeight = 25.sp, fontFamily = NotesFont),
+                    textStyle = TextStyle(color = NumioText, fontSize = 16.sp, lineHeight = 25.sp, fontFamily = NotesFont, fontFeatureSettings = "tnum"),
                     cursorBrush = SolidColor(NumioYellow),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 )
