@@ -14,3 +14,7 @@ Kotlin, Jetpack Compose, Room, DataStore, Navigation and
 GPL-3.0
 
 Built by RR with help from Claude.
+
+## Fonts
+Note text uses [Inter](https://github.com/rsms/inter) by The Inter Project Authors,
+licensed under the SIL Open Font License 1.1 (see `licenses/Inter-OFL.txt`).

@@ -1,6 +1,16 @@
 package com.rr.numio.notes.ui.editor
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.ParagraphStyle
+import androidx.compose.ui.text.style.TextAlign
+import com.mohamedrejeb.richeditor.paragraph.type.OrderedListStyleType
+import com.mohamedrejeb.richeditor.paragraph.type.UnorderedListStyleType
+import com.rr.numio.notes.ui.theme.NotesFont
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +71,14 @@ fun EditorScreen(
     onDone: () -> Unit,
 ) {
     val richState = rememberRichTextState()
+
+    // Lists: same indent for numbers and bullets so the text lines up,
+    // and a little more room after "1." and "•"
+    LaunchedEffect(Unit) {
+        richState.config.listIndent = 34
+        richState.config.orderedListStyleType = NotesNumbering
+        richState.config.unorderedListStyleType = UnorderedListStyleType.from("•\u2009", "◦\u2009", "▪\u2009")
+    }
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var notebook by remember { mutableStateOf("Personal") }
@@ -119,12 +137,12 @@ fun EditorScreen(
         ) {
             Box {
                 if (title.isEmpty()) {
-                    Text("Title", color = NumioTextFaint, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Title", color = NumioTextFaint, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = NotesFont)
                 }
                 BasicTextField(
                     value = title,
                     onValueChange = { title = it },
-                    textStyle = TextStyle(color = NumioText, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold),
+                    textStyle = TextStyle(color = NumioText, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = NotesFont),
                     cursorBrush = SolidColor(NumioYellow),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -132,11 +150,11 @@ fun EditorScreen(
             Box(Modifier.fillMaxWidth().height(1.dp).background(NumioDivider))
             Box {
                 if (richState.annotatedString.text.isEmpty()) {
-                    Text("Start writing…", color = NumioTextFaint, fontSize = 16.sp)
+                    Text("Start writing…", color = NumioTextFaint, fontSize = 16.sp, fontFamily = NotesFont)
                 }
                 BasicRichTextEditor(
                     state = richState,
-                    textStyle = TextStyle(color = NumioText, fontSize = 16.sp, lineHeight = 25.sp),
+                    textStyle = TextStyle(color = NumioText, fontSize = 16.sp, lineHeight = 25.sp, fontFamily = NotesFont),
                     cursorBrush = SolidColor(NumioYellow),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 )
@@ -169,6 +187,61 @@ fun EditorScreen(
             }
             FormatButton("1.", richState.isOrderedList, FontWeight.Bold) {
                 richState.toggleOrderedList()
+            }
+            // Alignment: tap to go left → centre → right
+            val align = richState.currentParagraphStyle.textAlign
+            val next = when (align) {
+                TextAlign.Center -> TextAlign.End
+                TextAlign.End, TextAlign.Right -> TextAlign.Start
+                else -> TextAlign.Center
+            }
+            AlignButton(align = align) {
+                richState.addParagraphStyle(ParagraphStyle(textAlign = next))
+            }
+        }
+    }
+}
+
+// 1. 2. 3. at the first level, then a. b. c., then i. ii. iii.
+private object NotesNumbering : OrderedListStyleType {
+    override fun format(number: Int, listLevel: Int): String = when ((listLevel - 1) % 3) {
+        0 -> number.toString()
+        1 -> OrderedListStyleType.LowerAlpha.format(number, listLevel)
+        else -> OrderedListStyleType.LowerRoman.format(number, listLevel)
+    }
+
+    override fun getSuffix(listLevel: Int): String = ".\u2002"
+}
+
+@Composable
+private fun AlignButton(align: TextAlign, onClick: () -> Unit) {
+    val active = align == TextAlign.Center || align == TextAlign.End || align == TextAlign.Right
+    val ink = if (active) NumioAccentInk else NumioText
+    val label = when (align) {
+        TextAlign.Center -> "Aligned centre"
+        TextAlign.End, TextAlign.Right -> "Aligned right"
+        else -> "Aligned left"
+    }
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(if (active) NumioAccentSoft else Color.Transparent)
+            .semantics { contentDescription = label },
+    ) {
+        // Four lines; the short ones move with the alignment
+        Canvas(Modifier.size(20.dp)) {
+            val u = size.width / 24f
+            val stroke = 2.2f * u
+            val rows = listOf(5f to 18f, 10f to 12f, 15f to 18f, 20f to 12f)
+            rows.forEach { (y, len) ->
+                val x0 = when (align) {
+                    TextAlign.Center -> (24f - len) / 2f
+                    TextAlign.End, TextAlign.Right -> 21f - len
+                    else -> 3f
+                }
+                drawLine(ink, Offset(x0 * u, y * u), Offset((x0 + len) * u, y * u), stroke, cap = StrokeCap.Round)
             }
         }
     }
