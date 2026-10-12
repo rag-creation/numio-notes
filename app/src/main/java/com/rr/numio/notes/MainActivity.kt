@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.drawing.DrawingScreen
 import com.rr.numio.notes.ui.editor.EditorScreen
 import com.rr.numio.notes.ui.editor.TodoScreen
 import com.rr.numio.notes.ui.list.NoteListScreen
@@ -57,10 +58,17 @@ class MainActivity : ComponentActivity() {
                         NoteListScreen(
                             viewModel = notesViewModel,
                             onOpenNote = { note ->
-                                nav.navigate(if (note.isTodo) "todo/${note.id}" else "editor/${note.id}")
+                                nav.navigate(
+                                    when {
+                                        note.isDrawing -> "drawing/${note.id}"
+                                        note.isTodo -> "todo/${note.id}"
+                                        else -> "editor/${note.id}"
+                                    }
+                                )
                             },
                             onNewNote = { nav.navigate("editor/0") },
                             onNewTodo = { nav.navigate("todo/0") },
+                            onNewDrawing = { nav.navigate("drawing/0") },
                             onOpenSettings = { nav.navigate("settings") },
                         )
                     }
@@ -79,6 +87,16 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("id") { type = NavType.LongType }),
                     ) { entry ->
                         TodoScreen(
+                            noteId = entry.arguments?.getLong("id") ?: 0L,
+                            viewModel = notesViewModel,
+                            onDone = { nav.popBackStack() },
+                        )
+                    }
+                    composable(
+                        "drawing/{id}",
+                        arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                    ) { entry ->
+                        DrawingScreen(
                             noteId = entry.arguments?.getLong("id") ?: 0L,
                             viewModel = notesViewModel,
                             onDone = { nav.popBackStack() },

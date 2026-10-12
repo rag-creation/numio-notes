@@ -13,6 +13,8 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rr.numio.notes.data.AppSettings
+import com.rr.numio.notes.data.Drawing
+import com.rr.numio.notes.data.DrawingCodec
 import com.rr.numio.notes.data.Note
 import com.rr.numio.notes.data.NotesDatabase
 import com.rr.numio.notes.data.TodoCodec
@@ -113,6 +115,25 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Called when leaving the drawing screen. An empty new drawing is not saved.
+    fun saveDrawing(id: Long, title: String, drawing: Drawing, pinned: Boolean, notebook: String) {
+        if (id == 0L && title.isBlank() && drawing.strokes.isEmpty()) return
+        viewModelScope.launch {
+            dao.upsert(
+                Note(
+                    id = id,
+                    title = title.trim(),
+                    contentHtml = DrawingCodec.encode(drawing),
+                    preview = "",
+                    notebook = notebook,
+                    pinned = pinned,
+                    updatedAt = System.currentTimeMillis(),
+                    isDrawing = true,
+                )
+            )
+        }
+    }
+
     // Ticking an item straight from the list card
     fun toggleTodoItem(note: Note, itemId: Long) {
         val items = TodoCodec.decode(note.contentHtml).map {
@@ -191,6 +212,23 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         } ?: uri.lastPathSegment.orEmpty()
+
+    fun deleteMany(list: List<Note>) {
+        viewModelScope.launch { dao.deleteAll(list) }
+    }
+
+    // Undo: the same notes come back with the same ids and dates
+    fun restoreMany(list: List<Note>) {
+        viewModelScope.launch { dao.upsertAll(list) }
+    }
+
+    fun setPinnedMany(list: List<Note>, pinned: Boolean) {
+        viewModelScope.launch { dao.upsertAll(list.map { it.copy(pinned = pinned) }) }
+    }
+
+    fun moveMany(list: List<Note>, notebook: String) {
+        viewModelScope.launch { dao.upsertAll(list.map { it.copy(notebook = notebook) }) }
+    }
 
     fun delete(note: Note) {
         viewModelScope.launch { dao.delete(note) }

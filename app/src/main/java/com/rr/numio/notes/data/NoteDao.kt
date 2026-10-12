@@ -26,6 +26,12 @@ interface NoteDao {
     @Insert
     suspend fun insertAll(notes: List<Note>)
 
+    @Upsert
+    suspend fun upsertAll(notes: List<Note>)
+
+    @Delete
+    suspend fun deleteAll(notes: List<Note>)
+
     @Query("UPDATE notes SET notebook = :to WHERE notebook = :from")
     suspend fun moveNotebook(from: String, to: String)
 }

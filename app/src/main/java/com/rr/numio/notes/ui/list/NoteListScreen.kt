@@ -1,6 +1,7 @@
 package com.rr.numio.notes.ui.list
 
 import android.text.Html
+import com.rr.numio.notes.ui.drawing.DrawingThumbnail
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.rr.numio.notes.ui.DEFAULT_NOTEBOOK
@@ -119,6 +120,7 @@ fun NoteListScreen(
     onOpenNote: (Note) -> Unit,
     onNewNote: () -> Unit,
     onNewTodo: () -> Unit,
+    onNewDrawing: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -141,7 +143,8 @@ fun NoteListScreen(
     // Plain text of every note, worked out once per change, so search looks at the whole note
     val searchText = remember(notes) {
         notes.associate { n ->
-            val body = if (n.isTodo) TodoCodec.decode(n.contentHtml).joinToString(" ") { it.text }
+            val body = if (n.isDrawing) "drawing"
+            else if (n.isTodo) TodoCodec.decode(n.contentHtml).joinToString(" ") { it.text }
             else Html.fromHtml(n.contentHtml, Html.FROM_HTML_MODE_COMPACT).toString()
             n.id to (n.title + " " + body)
         }
@@ -149,20 +152,35 @@ fun NoteListScreen(
     val q = query?.trim().orEmpty()
     val inNotebook = if (query != null || selectedNotebook == null) notes else notes.filter { it.notebook == selectedNotebook }
     val shown = if (q.isEmpty()) inNotebook else inNotebook.filter { searchText[it.id]?.contains(q, ignoreCase = true) == true }
-    // Long-pressed note (options sheet) and the last deleted one (for Undo)
-    var actionNote by remember { mutableStateOf<Note?>(null) }
-    var movingNote by remember { mutableStateOf<Note?>(null) }
+    // Selection: long-press a note to start, tap more to add or remove
+    var selectedIds by remember { mutableStateOf(setOf<Long>()) }
+    val selecting = selectedIds.isNotEmpty()
+    // Notes that were deleted can't stay selected
+    if (selecting && selectedIds.any { id -> notes.none { it.id == id } }) {
+        selectedIds = selectedIds.filter { id -> notes.any { it.id == id } }.toSet()
+    }
+    val selectedNotes = notes.filter { it.id in selectedIds }
+    var moving by remember { mutableStateOf(false) }
+    BackHandler(enabled = selecting) { selectedIds = emptySet() }
+    fun toggleSelect(note: Note) {
+        selectedIds = if (note.id in selectedIds) selectedIds - note.id else selectedIds + note.id
+    }
 
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    fun deleteWithUndo(note: Note) {
-        viewModel.delete(note)
+    fun deleteWithUndo(list: List<Note>) {
+        if (list.isEmpty()) return
+        viewModel.deleteMany(list)
+        selectedIds = emptySet()
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val label = note.title.ifBlank { if (note.isTodo) "To-do list" else "Note" }
-            val result = snackbar.showSnackbar("\"$label\" deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
-            if (result == SnackbarResult.ActionPerformed) viewModel.restore(note)
+            val message = if (list.size == 1) {
+                val n = list.first()
+                "\"" + n.title.ifBlank { if (n.isTodo) "To-do list" else if (n.isDrawing) "Drawing" else "Note" } + "\" deleted"
+            } else "${list.size} notes deleted"
+            val result = snackbar.showSnackbar(message, actionLabel = "Undo", duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreMany(list)
         }
     }
 
@@ -173,7 +191,20 @@ fun NoteListScreen(
             .statusBarsPadding()
     ) {
         Column(Modifier.fillMaxSize()) {
-            if (query == null) {
+            if (selecting) {
+                SelectionBar(
+                    count = selectedIds.size,
+                    allPinned = selectedNotes.isNotEmpty() && selectedNotes.all { it.pinned },
+                    onClose = { selectedIds = emptySet() },
+                    onSelectAll = { selectedIds = shown.map { it.id }.toSet() },
+                    onPin = {
+                        viewModel.setPinnedMany(selectedNotes, !selectedNotes.all { it.pinned })
+                        selectedIds = emptySet()
+                    },
+                    onMove = { moving = true },
+                    onDelete = { deleteWithUndo(selectedNotes) },
+                )
+            } else if (query == null) {
                 TopBar(
                     onSearch = { query = "" },
                     onLayout = { columns = if (columns == 2) 1 else 2 },
@@ -221,8 +252,9 @@ fun NoteListScreen(
                     items(shown, key = { it.id }) { note ->
                         NoteCard(
                             note = note,
-                            onClick = { onOpenNote(note) },
-                            onLongClick = { actionNote = note },
+                            selected = note.id in selectedIds,
+                            onClick = { if (selecting) toggleSelect(note) else onOpenNote(note) },
+                            onLongClick = { toggleSelect(note) },
                             onToggleItem = { itemId -> viewModel.toggleTodoItem(note, itemId) },
                         )
                     }
@@ -243,7 +275,7 @@ fun NoteListScreen(
             )
         }
 
-        Column(
+        if (!selecting) Column(
             Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
@@ -262,6 +294,11 @@ fun NoteListScreen(
                     }
                     MenuPill(R.drawable.ic_camera, "Camera") {
                         Toast.makeText(context, "Photo notes are coming soon", Toast.LENGTH_SHORT).show()
+                    }
+                    MenuPill(R.drawable.ic_pen, "Drawing") {
+                        menuOpen = false
+                        viewModel.newNoteNotebook = selectedNotebook ?: DEFAULT_NOTEBOOK
+                        onNewDrawing()
                     }
                     MenuPill(R.drawable.ic_todo, "New to-do") {
                         menuOpen = false
@@ -308,23 +345,16 @@ fun NoteListScreen(
         }
     }
 
-    actionNote?.let { note ->
-        NoteActionsSheet(
-            note = note,
-            onDismiss = { actionNote = null },
-            onTogglePin = { viewModel.setPinned(note, !note.pinned); actionNote = null },
-            onMove = { actionNote = null; movingNote = note },
-            onDelete = { actionNote = null; deleteWithUndo(note) },
-        )
-    }
-
-    movingNote?.let { note ->
+    if (moving) {
+        val common = selectedNotes.map { it.notebook }.distinct().singleOrNull().orEmpty()
         NotebookPickerSheet(
             notebooks = notebooks,
-            current = note.notebook,
-            onPick = { nb -> viewModel.moveNote(note, nb); movingNote = null },
-            onCreate = { nb -> viewModel.addNotebook(nb); viewModel.moveNote(note, nb); movingNote = null },
-            onDismiss = { movingNote = null },
+            current = common,
+            onPick = { nb -> viewModel.moveMany(selectedNotes, nb); moving = false; selectedIds = emptySet() },
+            onCreate = { nb ->
+                viewModel.addNotebook(nb); viewModel.moveMany(selectedNotes, nb); moving = false; selectedIds = emptySet()
+            },
+            onDismiss = { moving = false },
         )
     }
 
@@ -449,60 +479,51 @@ private fun EmptyNotebook(name: String) {
     }
 }
 
-// Bottom sheet shown on long-press
-@OptIn(ExperimentalMaterial3Api::class)
+// Top bar while notes are selected: ✕ · 3 selected · select all · pin · move · delete
 @Composable
-private fun NoteActionsSheet(
-    note: Note,
-    onDismiss: () -> Unit,
-    onTogglePin: () -> Unit,
+private fun SelectionBar(
+    count: Int,
+    allPinned: Boolean,
+    onClose: () -> Unit,
+    onSelectAll: () -> Unit,
+    onPin: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = NumioCard,
-        contentColor = NumioText,
-        dragHandle = {
-            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(NumioDivider))
-        },
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 12.dp, top = 20.dp, bottom = 12.dp)
+            .height(56.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.navigationBarsPadding().padding(start = 8.dp, end = 8.dp, bottom = 16.dp)) {
-            Text(
-                note.title.ifBlank { if (note.isTodo) "To-do list" else "Untitled note" },
-                color = NumioTextSoft,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-            )
-            SheetRow(
-                icon = R.drawable.ic_pin,
-                label = if (note.pinned) "Unpin" else "Pin to top",
-                tint = if (note.pinned) NumioAccentInk else NumioText,
-                onClick = onTogglePin,
-            )
-            SheetRow(icon = R.drawable.ic_folder, label = "Move to notebook · ${note.notebook}", tint = NumioText, onClick = onMove)
-            SheetRow(icon = R.drawable.ic_delete, label = "Delete", tint = Color(0xFFE5534B), onClick = onDelete)
+        IconButton(onClick = onClose) {
+            Icon(painterResource(R.drawable.ic_close), "Cancel selection", tint = NumioText, modifier = Modifier.size(22.dp))
         }
+        Text(
+            "$count selected",
+            color = NumioText,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.weight(1f).padding(start = 4.dp),
+        )
+        BarAction(R.drawable.ic_select_all, "Select all", NumioText, onSelectAll)
+        BarAction(R.drawable.ic_pin, if (allPinned) "Unpin" else "Pin", if (allPinned) NumioAccentInk else NumioText, onPin)
+        BarAction(R.drawable.ic_folder, "Move to notebook", NumioText, onMove)
+        BarAction(R.drawable.ic_delete, "Delete", Color(0xFFE5534B), onDelete)
     }
 }
 
 @Composable
-private fun SheetRow(icon: Int, label: String, tint: Color, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun BarAction(icon: Int, label: String, tint: Color, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(44.dp),
+        colors = IconButtonDefaults.iconButtonColors(containerColor = NumioButton),
     ) {
-        Icon(painterResource(icon), null, tint = tint, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(16.dp))
-        Text(label, color = if (label == "Delete") tint else NumioText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Icon(painterResource(icon), label, tint = tint, modifier = Modifier.size(20.dp))
     }
+    Spacer(Modifier.width(6.dp))
 }
 
 // One option in the + menu: icon in a small circle, then the label
@@ -620,12 +641,20 @@ private fun LayoutGlyph() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteCard(note: Note, onClick: () -> Unit, onLongClick: () -> Unit, onToggleItem: (Long) -> Unit) {
+private fun NoteCard(
+    note: Note,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleItem: (Long) -> Unit,
+) {
+    Box {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(NumioCard)
+            .border(2.dp, if (selected) NumioYellow else Color.Transparent, RoundedCornerShape(20.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -640,12 +669,29 @@ private fun NoteCard(note: Note, onClick: () -> Unit, onLongClick: () -> Unit, o
         if (note.title.isNotBlank()) {
             Text(note.title, color = NumioText, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        if (note.isTodo) {
+        if (note.isDrawing) {
+            DrawingThumbnail(note.contentHtml)
+        } else if (note.isTodo) {
             TodoPreview(note, onToggleItem)
         } else if (note.preview.isNotBlank()) {
             Text(note.preview, color = NumioTextSoft, fontSize = 13.sp, lineHeight = 19.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
         }
         Text("${formatDate(note.updatedAt)} · ${note.notebook}", color = NumioTextFaint, fontSize = 11.sp)
+    }
+    // Yellow tick in the corner of a selected note
+    if (selected) {
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(NumioYellow),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(R.drawable.ic_check), "Selected", tint = NumioOnAccent, modifier = Modifier.size(14.dp))
+        }
+    }
     }
 }
 

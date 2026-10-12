@@ -17,6 +17,8 @@ data class Note(
     val pinned: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(defaultValue = "0") val isTodo: Boolean = false,
+    // Drawing notes keep their strokes in contentHtml (see DrawingCodec)
+    @ColumnInfo(defaultValue = "0") val isDrawing: Boolean = false,
 )
 
 data class TodoItem(val id: Long, val text: String, val done: Boolean)
