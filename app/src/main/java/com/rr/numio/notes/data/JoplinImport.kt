@@ -3,13 +3,19 @@ package com.rr.numio.notes.data
 import java.io.InputStream
 import java.time.Instant
 
-// A note read from Joplin, still in Markdown
+// A note read from another app. Text comes as Markdown, plain text, or a checklist.
 data class ImportedNote(
     val title: String,
-    val markdown: String,
+    val markdown: String = "",
     val notebook: String,
     val updatedAt: Long,
-)
+    val plainText: String? = null,
+    val checklist: List<TodoItem>? = null,
+    val pinned: Boolean = false,
+) {
+    val isEmpty: Boolean
+        get() = title.isBlank() && markdown.isBlank() && plainText.isNullOrBlank() && checklist.isNullOrEmpty()
+}
 
 data class ImportBatch(
     val notes: List<ImportedNote>,
@@ -57,6 +63,18 @@ object JoplinImport {
             )
         }
         return ImportBatch(notes, encrypted)
+    }
+
+    // Plain .txt files, e.g. Samsung Notes "Save as file → Text file". File name = title.
+    fun readTextFile(fileName: String, text: String): ImportedNote {
+        val title = fileName.substringBeforeLast('.').trim()
+            .replace(Regex("_\\d{6,}(_\\d+)?$"), "") // drop date stamps some apps add
+        return ImportedNote(
+            title = title,
+            notebook = "Imported",
+            updatedAt = System.currentTimeMillis(),
+            plainText = text.replace("\r\n", "\n").trim('\uFEFF', '\n', ' '),
+        )
     }
 
     // Plain .md files (Joplin "Markdown" export, or any Markdown notes)

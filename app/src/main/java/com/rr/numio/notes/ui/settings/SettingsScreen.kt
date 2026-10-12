@@ -138,10 +138,20 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 SectionLabel("Import")
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
-                    SettingRow("Import from Joplin", "A .jex export file, or Markdown (.md) files") {
+                    SettingRow("Import notes", "Joplin, Google Keep, Samsung Notes, Markdown") {
                         picker.launch(arrayOf("*/*"))
                     }
                 }
+                Text(
+                    "Joplin: File → Export all → JEX\n" +
+                        "Google Keep: takeout.google.com → Keep → the .zip\n" +
+                        "Samsung Notes: select notes → Save as file → Text file\n" +
+                        "Other apps: .md or .txt files",
+                    color = NumioTextFaint,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                )
                 if (importState != null) {
                     Text(
                         importState,

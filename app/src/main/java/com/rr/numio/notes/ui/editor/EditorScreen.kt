@@ -61,6 +61,8 @@ import androidx.compose.ui.text.TextRange
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.rr.numio.notes.R
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.Share
+import androidx.compose.ui.platform.LocalContext
 import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
 import com.rr.numio.notes.ui.notebooks.NotebookPill
 import androidx.compose.runtime.collectAsState
@@ -81,6 +83,7 @@ fun EditorScreen(
     onDone: () -> Unit,
 ) {
     val richState = rememberRichTextState()
+    val context = LocalContext.current
 
     // Lists: same indent for numbers and bullets so the text lines up,
     // and a little more room after "1." and "•"
@@ -176,6 +179,9 @@ fun EditorScreen(
             }
             NotebookPill(notebook) { pickingNotebook = true }
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = { Share.text(context, title, richState.toHtml()) }) {
+                Icon(painterResource(R.drawable.ic_share), "Share", tint = NumioText, modifier = Modifier.size(20.dp))
+            }
             IconButton(onClick = { pinned = !pinned }) {
                 Icon(
                     painterResource(R.drawable.ic_pin),

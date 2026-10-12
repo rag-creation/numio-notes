@@ -54,6 +54,8 @@ import com.rr.numio.notes.R
 import com.rr.numio.notes.data.TodoCodec
 import com.rr.numio.notes.data.TodoItem
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.Share
+import androidx.compose.ui.platform.LocalContext
 import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
 import com.rr.numio.notes.ui.notebooks.NotebookPill
 import androidx.compose.runtime.collectAsState
@@ -74,6 +76,7 @@ fun TodoScreen(
     onDone: () -> Unit,
 ) {
     val items = remember { mutableStateListOf<TodoItem>() }
+    val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var notebook by remember { mutableStateOf(viewModel.newNoteNotebook) }
@@ -127,6 +130,9 @@ fun TodoScreen(
             }
             NotebookPill(notebook) { pickingNotebook = true }
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = { Share.todo(context, title, items.toList()) }) {
+                Icon(painterResource(R.drawable.ic_share), "Share", tint = NumioText, modifier = Modifier.size(20.dp))
+            }
             IconButton(onClick = { pinned = !pinned }) {
                 Icon(
                     painterResource(R.drawable.ic_pin),

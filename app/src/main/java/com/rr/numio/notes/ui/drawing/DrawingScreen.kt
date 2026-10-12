@@ -66,6 +66,8 @@ import com.rr.numio.notes.data.Drawing
 import com.rr.numio.notes.data.DrawingCodec
 import com.rr.numio.notes.data.Stroke
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.Share
+import androidx.compose.ui.platform.LocalContext
 import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
 import com.rr.numio.notes.ui.notebooks.NotebookPill
 import com.rr.numio.notes.ui.theme.NotesFont
@@ -101,6 +103,8 @@ fun DrawingScreen(
     viewModel: NotesViewModel,
     onDone: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val darkPage = NumioCard
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var notebook by remember { mutableStateOf(viewModel.newNoteNotebook) }
@@ -191,6 +195,15 @@ fun DrawingScreen(
                 enabled = redo.isNotEmpty(),
             ) {
                 Icon(painterResource(R.drawable.ic_redo), "Redo", tint = NumioText, modifier = Modifier.size(20.dp).alpha(if (redo.isNotEmpty()) 1f else 0.3f))
+            }
+            IconButton(
+                onClick = {
+                    val aspect = if (canvasSize.width > 0) canvasSize.height.toFloat() / canvasSize.width else 1.3f
+                    Share.drawing(context, title, Drawing(aspect, strokes.toList(), paper), darkPage)
+                },
+                enabled = strokes.isNotEmpty(),
+            ) {
+                Icon(painterResource(R.drawable.ic_share), "Share as picture", tint = NumioText, modifier = Modifier.size(20.dp).alpha(if (strokes.isNotEmpty()) 1f else 0.3f))
             }
             IconButton(onClick = { pinned = !pinned }) {
                 Icon(

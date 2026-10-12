@@ -7,6 +7,7 @@ import android.text.Html
 import com.mohamedrejeb.richeditor.model.RichTextState
 import com.rr.numio.notes.data.ImportedNote
 import com.rr.numio.notes.data.JoplinImport
+import com.rr.numio.notes.data.KeepImport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -153,7 +154,7 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { dao.upsert(note) }
     }
 
-    // --- Import from Joplin (.jex) or Markdown files ---
+    // --- Import: Joplin (.jex), Google Keep (Takeout), Samsung Notes (.txt), Markdown ---
     private val _importState = MutableStateFlow<String?>(null)
     val importState: StateFlow<String?> = _importState
     fun clearImportState() { _importState.value = null }
@@ -168,31 +169,56 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                     val notes = mutableListOf<ImportedNote>()
                     var encrypted = 0
                     for (uri in uris) {
-                        val name = fileName(app, uri)
+                        val name = fileName(app, uri).lowercase()
                         app.contentResolver.openInputStream(uri)?.use { input ->
-                            if (name.endsWith(".md", true) || name.endsWith(".markdown", true) || name.endsWith(".txt", true)) {
-                                notes += JoplinImport.readMarkdownFile(name, input.readBytes().toString(Charsets.UTF_8))
-                            } else {
-                                val batch = JoplinImport.readJex(input.buffered())
-                                notes += batch.notes
-                                encrypted += batch.skippedEncrypted
+                            when {
+                                name.endsWith(".md") || name.endsWith(".markdown") ->
+                                    notes += JoplinImport.readMarkdownFile(fileName(app, uri), input.readBytes().toString(Charsets.UTF_8))
+                                name.endsWith(".txt") ->
+                                    notes += JoplinImport.readTextFile(fileName(app, uri), input.readBytes().toString(Charsets.UTF_8))
+                                name.endsWith(".json") ->
+                                    KeepImport.readJson(input.readBytes().toString(Charsets.UTF_8))?.let { notes += it }
+                                name.endsWith(".zip") ->
+                                    notes += KeepImport.readZip(input.buffered())
+                                else -> {
+                                    val batch = JoplinImport.readJex(input.buffered())
+                                    notes += batch.notes
+                                    encrypted += batch.skippedEncrypted
+                                }
                             }
                         }
                     }
                     notes to encrypted
                 }
                 val (imported, encrypted) = read
-                // Markdown -> the editor's HTML, using the editor itself
                 // Notes with no title and no text are left out
-                val rows = imported.filter { it.title.isNotBlank() || it.markdown.isNotBlank() }.map { n ->
-                    val html = if (n.markdown.isBlank()) "" else RichTextState().setMarkdown(n.markdown).toHtml()
-                    Note(
-                        title = n.title,
-                        contentHtml = html,
-                        preview = htmlToPlain(html).take(200),
-                        notebook = n.notebook,
-                        updatedAt = n.updatedAt,
-                    )
+                val rows = imported.filter { !it.isEmpty }.map { n ->
+                    when {
+                        n.checklist != null -> Note(
+                            title = n.title,
+                            contentHtml = TodoCodec.encode(n.checklist),
+                            preview = n.checklist.joinToString(", ") { it.text }.take(200),
+                            notebook = n.notebook,
+                            pinned = n.pinned,
+                            updatedAt = n.updatedAt,
+                            isTodo = true,
+                        )
+                        else -> {
+                            val html = when {
+                                n.plainText != null -> plainToHtml(n.plainText)
+                                n.markdown.isNotBlank() -> RichTextState().setMarkdown(n.markdown).toHtml()
+                                else -> ""
+                            }
+                            Note(
+                                title = n.title,
+                                contentHtml = html,
+                                preview = htmlToPlain(html).take(200),
+                                notebook = n.notebook,
+                                pinned = n.pinned,
+                                updatedAt = n.updatedAt,
+                            )
+                        }
+                    }
                 }
                 dao.insertAll(rows)
                 rows.map { it.notebook }.distinct().forEach { if (it != DEFAULT_NOTEBOOK) settings.addNotebook(it) }
@@ -204,9 +230,15 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                     append(".")
                 }
             }
-            _importState.value = result.getOrElse { "Couldn't read that file. Pick a Joplin .jex export or .md files." }
+            _importState.value = result.getOrElse { "Couldn't read that file. Supported: Joplin .jex, Google Keep Takeout .zip or .json, .txt and .md files." }
         }
     }
+
+    // Plain text -> simple HTML paragraphs (keeps line breaks, no Markdown guessing)
+    private fun plainToHtml(text: String): String =
+        text.trim().split("\n").joinToString("") { line ->
+            if (line.isBlank()) "<p><br></p>" else "<p>" + android.text.TextUtils.htmlEncode(line) + "</p>"
+        }
 
     private fun fileName(app: Application, uri: Uri): String =
         app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
