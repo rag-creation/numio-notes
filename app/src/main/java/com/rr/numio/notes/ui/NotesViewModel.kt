@@ -162,7 +162,8 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val (imported, encrypted) = read
                 // Markdown -> the editor's HTML, using the editor itself
-                val rows = imported.map { n ->
+                // Notes with no title and no text are left out
+                val rows = imported.filter { it.title.isNotBlank() || it.markdown.isNotBlank() }.map { n ->
                     val html = if (n.markdown.isBlank()) "" else RichTextState().setMarkdown(n.markdown).toHtml()
                     Note(
                         title = n.title,
