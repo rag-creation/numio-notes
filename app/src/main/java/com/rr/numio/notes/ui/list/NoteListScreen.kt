@@ -1,6 +1,16 @@
 package com.rr.numio.notes.ui.list
 
+import android.text.Html
 import android.widget.Toast
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -111,6 +121,20 @@ fun NoteListScreen(
     var columns by remember { mutableIntStateOf(2) }
     var menuOpen by remember { mutableStateOf(false) }
     BackHandler(enabled = menuOpen) { menuOpen = false }
+
+    // Search: null = closed, otherwise the text typed so far
+    var query by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = query != null && !menuOpen) { query = null }
+    // Plain text of every note, worked out once per change, so search looks at the whole note
+    val searchText = remember(notes) {
+        notes.associate { n ->
+            val body = if (n.isTodo) TodoCodec.decode(n.contentHtml).joinToString(" ") { it.text }
+            else Html.fromHtml(n.contentHtml, Html.FROM_HTML_MODE_COMPACT).toString()
+            n.id to (n.title + " " + body)
+        }
+    }
+    val q = query?.trim().orEmpty()
+    val shown = if (q.isEmpty()) notes else notes.filter { searchText[it.id]?.contains(q, ignoreCase = true) == true }
     // Long-pressed note (options sheet) and the last deleted one (for Undo)
     var actionNote by remember { mutableStateOf<Note?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -133,14 +157,32 @@ fun NoteListScreen(
             .statusBarsPadding()
     ) {
         Column(Modifier.fillMaxSize()) {
-            TopBar(
-                onSearch = { /* search comes later */ },
-                onLayout = { columns = if (columns == 2) 1 else 2 },
-                onSettings = onOpenSettings,
-            )
+            if (query == null) {
+                TopBar(
+                    onSearch = { query = "" },
+                    onLayout = { columns = if (columns == 2) 1 else 2 },
+                    onSettings = onOpenSettings,
+                )
+            } else {
+                SearchBar(
+                    value = query.orEmpty(),
+                    onChange = { query = it },
+                    onClose = { query = null },
+                )
+                if (q.isNotEmpty() && shown.isNotEmpty()) {
+                    Text(
+                        if (shown.size == 1) "1 note" else "${shown.size} notes",
+                        color = NumioTextFaint,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(start = 20.dp, bottom = 4.dp),
+                    )
+                }
+            }
 
             if (notes.isEmpty()) {
                 EmptyState()
+            } else if (shown.isEmpty()) {
+                NoResults(q)
             } else {
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(columns),
@@ -149,7 +191,7 @@ fun NoteListScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalItemSpacing = 10.dp,
                 ) {
-                    items(notes, key = { it.id }) { note ->
+                    items(shown, key = { it.id }) { note ->
                         NoteCard(
                             note = note,
                             onClick = { onOpenNote(note) },
@@ -482,6 +524,62 @@ private fun TodoPreview(note: Note, onToggleItem: (Long) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(NumioTrack)) {
             Box(Modifier.fillMaxWidth(done.toFloat() / items.size).height(4.dp).background(NumioYellow))
+        }
+    }
+}
+
+@Composable
+private fun SearchBar(value: String, onChange: (String) -> Unit, onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 12.dp)
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(NumioButton)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(painterResource(R.drawable.ic_back), "Close search", tint = NumioText, modifier = Modifier.size(22.dp))
+        }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text("Search notes", color = NumioTextFaint, fontSize = 16.sp)
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TextStyle(color = NumioText, fontSize = 16.sp),
+                cursorBrush = SolidColor(NumioYellow),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            )
+        }
+        if (value.isNotEmpty()) {
+            IconButton(onClick = { onChange("") }) {
+                Icon(painterResource(R.drawable.ic_close), "Clear", tint = NumioTextSoft, modifier = Modifier.size(18.dp))
+            }
+        } else {
+            Box(Modifier.padding(end = 14.dp)) { SearchGlyph() }
+        }
+    }
+}
+
+@Composable
+private fun NoResults(q: String) {
+    Column(
+        Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = 160.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (q.isEmpty()) {
+            Text("Type to search your notes", color = NumioTextFaint, fontSize = 14.sp)
+        } else {
+            Text("Nothing for \"$q\"", color = NumioText, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text("Try another word", color = NumioTextFaint, fontSize = 14.sp)
         }
     }
 }
