@@ -1,6 +1,9 @@
 package com.rr.numio.notes.ui.settings
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -69,8 +72,15 @@ fun SettingsScreen(
     themeId: String,
     onModeChange: (String) -> Unit,
     onThemeChange: (String) -> Unit,
+    importState: String?,
+    onImport: (List<Uri>) -> Unit,
+    onImportSeen: () -> Unit,
     onBack: () -> Unit,
 ) {
+    // Pick one Joplin .jex export, or one or more .md files
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) onImport(uris)
+    }
     val context = LocalContext.current
     val version = remember {
         runCatching {
@@ -80,6 +90,7 @@ fun SettingsScreen(
     var taps by remember { mutableIntStateOf(0) }
     var showEgg by remember { mutableStateOf(false) }
 
+    DisposableEffect(Unit) { onDispose { onImportSeen() } }
     BackHandler(onBack = onBack)
 
     Box(Modifier.fillMaxSize().background(NumioBackground)) {
@@ -123,6 +134,21 @@ fun SettingsScreen(
                             ThemeSwatch(p, selected = p.id == themeId) { onThemeChange(p.id) }
                         }
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                SectionLabel("Import")
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
+                    SettingRow("Import from Joplin", "A .jex export file, or Markdown (.md) files") {
+                        picker.launch(arrayOf("*/*"))
+                    }
+                }
+                if (importState != null) {
+                    Text(
+                        importState,
+                        color = if (importState.startsWith("Imported")) NumioAccentInk else NumioTextSoft,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 SectionLabel("About")

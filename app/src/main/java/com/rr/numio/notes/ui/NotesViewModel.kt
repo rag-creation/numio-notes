@@ -1,7 +1,15 @@
 package com.rr.numio.notes.ui
 
 import android.app.Application
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.text.Html
+import com.mohamedrejeb.richeditor.model.RichTextState
+import com.rr.numio.notes.data.ImportedNote
+import com.rr.numio.notes.data.JoplinImport
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rr.numio.notes.data.AppSettings
@@ -123,6 +131,65 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
     fun restore(note: Note) {
         viewModelScope.launch { dao.upsert(note) }
     }
+
+    // --- Import from Joplin (.jex) or Markdown files ---
+    private val _importState = MutableStateFlow<String?>(null)
+    val importState: StateFlow<String?> = _importState
+    fun clearImportState() { _importState.value = null }
+
+    fun import(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _importState.value = "Importing…"
+            val result = runCatching {
+                val read = withContext(Dispatchers.IO) {
+                    val notes = mutableListOf<ImportedNote>()
+                    var encrypted = 0
+                    for (uri in uris) {
+                        val name = fileName(app, uri)
+                        app.contentResolver.openInputStream(uri)?.use { input ->
+                            if (name.endsWith(".md", true) || name.endsWith(".markdown", true) || name.endsWith(".txt", true)) {
+                                notes += JoplinImport.readMarkdownFile(name, input.readBytes().toString(Charsets.UTF_8))
+                            } else {
+                                val batch = JoplinImport.readJex(input.buffered())
+                                notes += batch.notes
+                                encrypted += batch.skippedEncrypted
+                            }
+                        }
+                    }
+                    notes to encrypted
+                }
+                val (imported, encrypted) = read
+                // Markdown -> the editor's HTML, using the editor itself
+                val rows = imported.map { n ->
+                    val html = if (n.markdown.isBlank()) "" else RichTextState().setMarkdown(n.markdown).toHtml()
+                    Note(
+                        title = n.title,
+                        contentHtml = html,
+                        preview = htmlToPlain(html).take(200),
+                        notebook = n.notebook,
+                        updatedAt = n.updatedAt,
+                    )
+                }
+                dao.insertAll(rows)
+                rows.map { it.notebook }.distinct().forEach { if (it != DEFAULT_NOTEBOOK) settings.addNotebook(it) }
+                val books = rows.map { it.notebook }.distinct().size
+                buildString {
+                    append(if (rows.size == 1) "Imported 1 note" else "Imported ${rows.size} notes")
+                    if (books > 0) append(if (books == 1) " into 1 notebook" else " into $books notebooks")
+                    if (encrypted > 0) append(". Skipped $encrypted encrypted (turn off encryption in Joplin first)")
+                    append(".")
+                }
+            }
+            _importState.value = result.getOrElse { "Couldn't read that file. Pick a Joplin .jex export or .md files." }
+        }
+    }
+
+    private fun fileName(app: Application, uri: Uri): String =
+        app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment.orEmpty()
 
     fun delete(note: Note) {
         viewModelScope.launch { dao.delete(note) }

@@ -90,6 +90,9 @@ class MainActivity : ComponentActivity() {
                             themeId = t,
                             onModeChange = { scope.launch { appSettings.setMode(it) } },
                             onThemeChange = { scope.launch { appSettings.setTheme(it) } },
+                            importState = notesViewModel.importState.collectAsState().value,
+                            onImport = { notesViewModel.import(it) },
+                            onImportSeen = { notesViewModel.clearImportState() },
                             onBack = { nav.popBackStack() },
                         )
                     }

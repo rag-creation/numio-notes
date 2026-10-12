@@ -2,6 +2,7 @@ package com.rr.numio.notes.data
 
 import androidx.room.Dao
 import androidx.room.Delete
+import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +22,9 @@ interface NoteDao {
 
     @Delete
     suspend fun delete(note: Note)
+
+    @Insert
+    suspend fun insertAll(notes: List<Note>)
 
     @Query("UPDATE notes SET notebook = :to WHERE notebook = :from")
     suspend fun moveNotebook(from: String, to: String)
