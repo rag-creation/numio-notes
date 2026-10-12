@@ -1,6 +1,12 @@
 package com.rr.numio.notes.ui.list
 
 import android.text.Html
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import com.rr.numio.notes.ui.DEFAULT_NOTEBOOK
+import com.rr.numio.notes.ui.notebooks.NameDialog
+import com.rr.numio.notes.ui.notebooks.NotebookActionsSheet
+import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
 import android.widget.Toast
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -134,9 +140,19 @@ fun NoteListScreen(
         }
     }
     val q = query?.trim().orEmpty()
-    val shown = if (q.isEmpty()) notes else notes.filter { searchText[it.id]?.contains(q, ignoreCase = true) == true }
+    val inNotebook = if (query != null || selectedNotebook == null) notes else notes.filter { it.notebook == selectedNotebook }
+    val shown = if (q.isEmpty()) inNotebook else inNotebook.filter { searchText[it.id]?.contains(q, ignoreCase = true) == true }
     // Long-pressed note (options sheet) and the last deleted one (for Undo)
     var actionNote by remember { mutableStateOf<Note?>(null) }
+    var movingNote by remember { mutableStateOf<Note?>(null) }
+
+    // Notebooks: null = All
+    val notebooks by viewModel.notebooks.collectAsState()
+    var selectedNotebook by remember { mutableStateOf<String?>(null) }
+    if (selectedNotebook != null && selectedNotebook !in notebooks) selectedNotebook = null
+    var chipActions by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var creatingNotebook by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -163,6 +179,15 @@ fun NoteListScreen(
                     onLayout = { columns = if (columns == 2) 1 else 2 },
                     onSettings = onOpenSettings,
                 )
+                NotebookChips(
+                    notebooks = notebooks,
+                    counts = notes.groupingBy { it.notebook }.eachCount(),
+                    total = notes.size,
+                    selected = selectedNotebook,
+                    onSelect = { selectedNotebook = it },
+                    onLongPress = { chipActions = it },
+                    onNew = { creatingNotebook = true },
+                )
             } else {
                 SearchBar(
                     value = query.orEmpty(),
@@ -181,6 +206,8 @@ fun NoteListScreen(
 
             if (notes.isEmpty()) {
                 EmptyState()
+            } else if (shown.isEmpty() && query == null) {
+                EmptyNotebook(selectedNotebook.orEmpty())
             } else if (shown.isEmpty()) {
                 NoResults(q)
             } else {
@@ -236,8 +263,16 @@ fun NoteListScreen(
                     MenuPill(R.drawable.ic_camera, "Camera") {
                         Toast.makeText(context, "Photo notes are coming soon", Toast.LENGTH_SHORT).show()
                     }
-                    MenuPill(R.drawable.ic_todo, "New to-do") { menuOpen = false; onNewTodo() }
-                    MenuPill(R.drawable.ic_note, "New note", primary = true) { menuOpen = false; onNewNote() }
+                    MenuPill(R.drawable.ic_todo, "New to-do") {
+                        menuOpen = false
+                        viewModel.newNoteNotebook = selectedNotebook ?: DEFAULT_NOTEBOOK
+                        onNewTodo()
+                    }
+                    MenuPill(R.drawable.ic_note, "New note", primary = true) {
+                        menuOpen = false
+                        viewModel.newNoteNotebook = selectedNotebook ?: DEFAULT_NOTEBOOK
+                        onNewNote()
+                    }
                 }
             }
             FloatingActionButton(
@@ -278,8 +313,139 @@ fun NoteListScreen(
             note = note,
             onDismiss = { actionNote = null },
             onTogglePin = { viewModel.setPinned(note, !note.pinned); actionNote = null },
+            onMove = { actionNote = null; movingNote = note },
             onDelete = { actionNote = null; deleteWithUndo(note) },
         )
+    }
+
+    movingNote?.let { note ->
+        NotebookPickerSheet(
+            notebooks = notebooks,
+            current = note.notebook,
+            onPick = { nb -> viewModel.moveNote(note, nb); movingNote = null },
+            onCreate = { nb -> viewModel.addNotebook(nb); viewModel.moveNote(note, nb); movingNote = null },
+            onDismiss = { movingNote = null },
+        )
+    }
+
+    chipActions?.let { nb ->
+        NotebookActionsSheet(
+            name = nb,
+            noteCount = notes.count { it.notebook == nb },
+            onRename = { chipActions = null; renaming = nb },
+            onDelete = {
+                chipActions = null
+                viewModel.deleteNotebook(nb)
+                if (selectedNotebook == nb) selectedNotebook = null
+            },
+            onDismiss = { chipActions = null },
+        )
+    }
+
+    renaming?.let { nb ->
+        NameDialog(
+            title = "Rename notebook",
+            initial = nb,
+            confirm = "Rename",
+            taken = notebooks,
+            onConfirm = { newName ->
+                viewModel.renameNotebook(nb, newName)
+                if (selectedNotebook == nb) selectedNotebook = newName
+                renaming = null
+            },
+            onDismiss = { renaming = null },
+        )
+    }
+
+    if (creatingNotebook) {
+        NameDialog(
+            title = "New notebook",
+            initial = "",
+            confirm = "Create",
+            taken = notebooks,
+            onConfirm = { nb -> viewModel.addNotebook(nb); selectedNotebook = nb; creatingNotebook = false },
+            onDismiss = { creatingNotebook = false },
+        )
+    }
+}
+
+// All · Personal · Numio · … · +   (long-press a notebook to rename or delete it)
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NotebookChips(
+    notebooks: List<String>,
+    counts: Map<String, Int>,
+    total: Int,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onLongPress: (String) -> Unit,
+    onNew: () -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(key = "all") { Chip("All · $total", selected == null, onClick = { onSelect(null) }) }
+        items(notebooks, key = { "nb_$it" }) { nb ->
+            val n = counts[nb] ?: 0
+            Chip(
+                if (n > 0) "$nb · $n" else nb,
+                selected == nb,
+                onClick = { onSelect(nb) },
+                onLongClick = if (nb == DEFAULT_NOTEBOOK) null else ({ onLongPress(nb) }),
+            )
+        }
+        item(key = "new") {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, NumioDivider, CircleShape)
+                    .clickable(onClick = onNew)
+                    .semantics { contentDescription = "New notebook" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(R.drawable.ic_add), null, tint = NumioTextSoft, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Chip(label: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+    Box(
+        Modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .then(
+                if (selected) Modifier.background(NumioYellow)
+                else Modifier.border(1.dp, NumioDivider, RoundedCornerShape(18.dp))
+            )
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (selected) NumioOnAccent else NumioTextBody,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun EmptyNotebook(name: String) {
+    Column(
+        Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = 160.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("$name is empty", color = NumioText, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(4.dp))
+        Text("Tap + and new notes go here", color = NumioTextFaint, fontSize = 14.sp)
     }
 }
 
@@ -290,6 +456,7 @@ private fun NoteActionsSheet(
     note: Note,
     onDismiss: () -> Unit,
     onTogglePin: () -> Unit,
+    onMove: () -> Unit,
     onDelete: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -316,6 +483,7 @@ private fun NoteActionsSheet(
                 tint = if (note.pinned) NumioAccentInk else NumioText,
                 onClick = onTogglePin,
             )
+            SheetRow(icon = R.drawable.ic_folder, label = "Move to notebook · ${note.notebook}", tint = NumioText, onClick = onMove)
             SheetRow(icon = R.drawable.ic_delete, label = "Delete", tint = Color(0xFFE5534B), onClick = onDelete)
         }
     }

@@ -61,6 +61,9 @@ import androidx.compose.ui.text.TextRange
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.rr.numio.notes.R
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
+import com.rr.numio.notes.ui.notebooks.NotebookPill
+import androidx.compose.runtime.collectAsState
 import com.rr.numio.notes.ui.theme.NumioAccentInk
 import com.rr.numio.notes.ui.theme.NumioAccentSoft
 import com.rr.numio.notes.ui.theme.NumioBackground
@@ -96,7 +99,9 @@ fun EditorScreen(
     }
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
-    var notebook by remember { mutableStateOf("Personal") }
+    var notebook by remember { mutableStateOf(viewModel.newNoteNotebook) }
+    var pickingNotebook by remember { mutableStateOf(false) }
+    val notebooks by viewModel.notebooks.collectAsState()
     var loaded by remember { mutableStateOf(noteId == 0L) }
 
     // What B / I / U were set to, and from which text position. Keyboards send a word that is
@@ -169,7 +174,7 @@ fun EditorScreen(
             IconButton(onClick = saveAndExit) {
                 Icon(painterResource(R.drawable.ic_back), "Back", tint = NumioText)
             }
-            Text(notebook, color = NumioTextFaint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            NotebookPill(notebook) { pickingNotebook = true }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = { pinned = !pinned }) {
                 Icon(
@@ -247,6 +252,16 @@ fun EditorScreen(
                 richState.addParagraphStyle(ParagraphStyle(textAlign = next))
             }
         }
+    }
+
+    if (pickingNotebook) {
+        NotebookPickerSheet(
+            notebooks = notebooks,
+            current = notebook,
+            onPick = { notebook = it; pickingNotebook = false },
+            onCreate = { viewModel.addNotebook(it); notebook = it; pickingNotebook = false },
+            onDismiss = { pickingNotebook = false },
+        )
     }
 }
 

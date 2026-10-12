@@ -54,6 +54,9 @@ import com.rr.numio.notes.R
 import com.rr.numio.notes.data.TodoCodec
 import com.rr.numio.notes.data.TodoItem
 import com.rr.numio.notes.ui.NotesViewModel
+import com.rr.numio.notes.ui.notebooks.NotebookPickerSheet
+import com.rr.numio.notes.ui.notebooks.NotebookPill
+import androidx.compose.runtime.collectAsState
 import com.rr.numio.notes.ui.theme.NumioAccentInk
 import com.rr.numio.notes.ui.theme.NumioCheckBorder
 import com.rr.numio.notes.ui.theme.NumioTrack
@@ -73,7 +76,9 @@ fun TodoScreen(
     val items = remember { mutableStateListOf<TodoItem>() }
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
-    var notebook by remember { mutableStateOf("Personal") }
+    var notebook by remember { mutableStateOf(viewModel.newNoteNotebook) }
+    var pickingNotebook by remember { mutableStateOf(false) }
+    val notebooks by viewModel.notebooks.collectAsState()
     var loaded by remember { mutableStateOf(false) }
     var nextId by remember { mutableLongStateOf(1L) }
     var focusId by remember { mutableLongStateOf(-1L) }
@@ -120,7 +125,7 @@ fun TodoScreen(
             IconButton(onClick = saveAndExit) {
                 Icon(painterResource(R.drawable.ic_back), "Back", tint = NumioText)
             }
-            Text(notebook, color = NumioTextFaint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            NotebookPill(notebook) { pickingNotebook = true }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = { pinned = !pinned }) {
                 Icon(
@@ -190,6 +195,16 @@ fun TodoScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (pickingNotebook) {
+        NotebookPickerSheet(
+            notebooks = notebooks,
+            current = notebook,
+            onPick = { notebook = it; pickingNotebook = false },
+            onCreate = { viewModel.addNotebook(it); notebook = it; pickingNotebook = false },
+            onDismiss = { pickingNotebook = false },
+        )
     }
 }
 

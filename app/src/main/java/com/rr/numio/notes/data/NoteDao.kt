@@ -21,4 +21,7 @@ interface NoteDao {
 
     @Delete
     suspend fun delete(note: Note)
+
+    @Query("UPDATE notes SET notebook = :to WHERE notebook = :from")
+    suspend fun moveNotebook(from: String, to: String)
 }

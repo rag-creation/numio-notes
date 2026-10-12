@@ -4,11 +4,13 @@ import android.app.Application
 import android.text.Html
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.rr.numio.notes.data.AppSettings
 import com.rr.numio.notes.data.Note
 import com.rr.numio.notes.data.NotesDatabase
 import com.rr.numio.notes.data.TodoCodec
 import com.rr.numio.notes.data.TodoItem
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -17,8 +19,50 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
 
     private val dao = NotesDatabase.get(app).noteDao()
 
+    private val settings = AppSettings(app)
+
     val notes: StateFlow<List<Note>> = dao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Personal first, then the rest A–Z: the ones you made plus any a note is in
+    val notebooks: StateFlow<List<String>> = combine(notes, settings.notebooks) { list, saved ->
+        listOf(DEFAULT_NOTEBOOK) + (saved + list.map { it.notebook })
+            .filter { it.isNotBlank() && it != DEFAULT_NOTEBOOK }
+            .distinct()
+            .sortedBy { it.lowercase() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(DEFAULT_NOTEBOOK))
+
+    // Notebook a new note starts in (the one you're looking at on the list)
+    var newNoteNotebook: String = DEFAULT_NOTEBOOK
+
+    fun addNotebook(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty() || clean == DEFAULT_NOTEBOOK) return
+        viewModelScope.launch { settings.addNotebook(clean) }
+    }
+
+    fun moveNote(note: Note, notebook: String) {
+        viewModelScope.launch { dao.upsert(note.copy(notebook = notebook)) }
+    }
+
+    fun renameNotebook(from: String, to: String) {
+        val clean = to.trim()
+        if (from == DEFAULT_NOTEBOOK || clean.isEmpty() || clean == from) return
+        viewModelScope.launch {
+            dao.moveNotebook(from, clean)
+            settings.removeNotebook(from)
+            if (clean != DEFAULT_NOTEBOOK) settings.addNotebook(clean)
+        }
+    }
+
+    // Deleting a notebook keeps its notes: they go back to Personal
+    fun deleteNotebook(name: String) {
+        if (name == DEFAULT_NOTEBOOK) return
+        viewModelScope.launch {
+            dao.moveNotebook(name, DEFAULT_NOTEBOOK)
+            settings.removeNotebook(name)
+        }
+    }
 
     suspend fun load(id: Long): Note? = if (id == 0L) null else dao.getById(id)
 
@@ -87,3 +131,5 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
     private fun htmlToPlain(html: String): String =
         Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT).toString().trim()
 }
+
+const val DEFAULT_NOTEBOOK = "Personal"
