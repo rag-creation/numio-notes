@@ -126,6 +126,13 @@ fun NoteListScreen(
     // 2 columns (staggered) or 1 column list, switched by the layout button
     var columns by remember { mutableIntStateOf(2) }
     var menuOpen by remember { mutableStateOf(false) }
+    // Notebooks: null = All
+    val notebooks by viewModel.notebooks.collectAsState()
+    var selectedNotebook by remember { mutableStateOf<String?>(null) }
+    if (selectedNotebook != null && selectedNotebook !in notebooks) selectedNotebook = null
+    var chipActions by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var creatingNotebook by remember { mutableStateOf(false) }
     BackHandler(enabled = menuOpen) { menuOpen = false }
 
     // Search: null = closed, otherwise the text typed so far
@@ -146,13 +153,6 @@ fun NoteListScreen(
     var actionNote by remember { mutableStateOf<Note?>(null) }
     var movingNote by remember { mutableStateOf<Note?>(null) }
 
-    // Notebooks: null = All
-    val notebooks by viewModel.notebooks.collectAsState()
-    var selectedNotebook by remember { mutableStateOf<String?>(null) }
-    if (selectedNotebook != null && selectedNotebook !in notebooks) selectedNotebook = null
-    var chipActions by remember { mutableStateOf<String?>(null) }
-    var renaming by remember { mutableStateOf<String?>(null) }
-    var creatingNotebook by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
