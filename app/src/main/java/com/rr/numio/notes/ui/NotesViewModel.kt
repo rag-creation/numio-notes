@@ -71,6 +71,15 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setPinned(note: Note, pinned: Boolean) {
+        viewModelScope.launch { dao.upsert(note.copy(pinned = pinned)) }
+    }
+
+    // Undo a delete: put the same note back (same id, same date)
+    fun restore(note: Note) {
+        viewModelScope.launch { dao.upsert(note) }
+    }
+
     fun delete(note: Note) {
         viewModelScope.launch { dao.delete(note) }
     }

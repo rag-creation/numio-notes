@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import com.rr.numio.notes.ui.theme.NumioDivider
 import com.rr.numio.notes.ui.theme.LocalNotesPalette
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,7 +40,18 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -99,6 +111,20 @@ fun NoteListScreen(
     var columns by remember { mutableIntStateOf(2) }
     var menuOpen by remember { mutableStateOf(false) }
     BackHandler(enabled = menuOpen) { menuOpen = false }
+    // Long-pressed note (options sheet) and the last deleted one (for Undo)
+    var actionNote by remember { mutableStateOf<Note?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    fun deleteWithUndo(note: Note) {
+        viewModel.delete(note)
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val label = note.title.ifBlank { if (note.isTodo) "To-do list" else "Note" }
+            val result = snackbar.showSnackbar("\"$label\" deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) viewModel.restore(note)
+        }
+    }
 
     Box(
         Modifier
@@ -127,6 +153,7 @@ fun NoteListScreen(
                         NoteCard(
                             note = note,
                             onClick = { onOpenNote(note) },
+                            onLongClick = { actionNote = note },
                             onToggleItem = { itemId -> viewModel.toggleTodoItem(note, itemId) },
                         )
                     }
@@ -185,6 +212,86 @@ fun NoteListScreen(
                 )
             }
         }
+
+        // Undo bar, above the + button
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 96.dp, bottom = 16.dp),
+        ) { data ->
+            Snackbar(
+                snackbarData = data,
+                containerColor = NumioRaised,
+                contentColor = NumioText,
+                actionColor = NumioAccentInk,
+                shape = RoundedCornerShape(16.dp),
+            )
+        }
+    }
+
+    actionNote?.let { note ->
+        NoteActionsSheet(
+            note = note,
+            onDismiss = { actionNote = null },
+            onTogglePin = { viewModel.setPinned(note, !note.pinned); actionNote = null },
+            onDelete = { actionNote = null; deleteWithUndo(note) },
+        )
+    }
+}
+
+// Bottom sheet shown on long-press
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NoteActionsSheet(
+    note: Note,
+    onDismiss: () -> Unit,
+    onTogglePin: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = NumioCard,
+        contentColor = NumioText,
+        dragHandle = {
+            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(NumioDivider))
+        },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(start = 8.dp, end = 8.dp, bottom = 16.dp)) {
+            Text(
+                note.title.ifBlank { if (note.isTodo) "To-do list" else "Untitled note" },
+                color = NumioTextSoft,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            )
+            SheetRow(
+                icon = R.drawable.ic_pin,
+                label = if (note.pinned) "Unpin" else "Pin to top",
+                tint = if (note.pinned) NumioAccentInk else NumioText,
+                onClick = onTogglePin,
+            )
+            SheetRow(icon = R.drawable.ic_delete, label = "Delete", tint = Color(0xFFE5534B), onClick = onDelete)
+        }
+    }
+}
+
+@Composable
+private fun SheetRow(icon: Int, label: String, tint: Color, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(16.dp))
+        Text(label, color = if (label == "Delete") tint else NumioText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -301,14 +408,15 @@ private fun LayoutGlyph() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteCard(note: Note, onClick: () -> Unit, onToggleItem: (Long) -> Unit) {
+private fun NoteCard(note: Note, onClick: () -> Unit, onLongClick: () -> Unit, onToggleItem: (Long) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(NumioCard)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
