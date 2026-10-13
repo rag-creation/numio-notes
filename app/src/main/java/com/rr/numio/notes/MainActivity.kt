@@ -1,6 +1,7 @@
 package com.rr.numio.notes
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -80,6 +81,12 @@ class MainActivity : FragmentActivity() {
             val mode by appSettings.mode.collectAsState(initial = null)
             val themeId by appSettings.theme.collectAsState(initial = null)
             val lockSetting by appSettings.appLock.collectAsState(initial = null)
+            val blockShots by appSettings.blockScreenshots.collectAsState(initial = false)
+            // Block screenshots / screen recording when chosen in Settings
+            SideEffect {
+                if (blockShots) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             val m = mode ?: return@setContent
             val t = themeId ?: return@setContent
             val lockOn = lockSetting ?: return@setContent
@@ -174,6 +181,8 @@ class MainActivity : FragmentActivity() {
                                     scope.launch { appSettings.setAppLock(on) }
                                 }
                             },
+                            blockScreenshots = blockShots,
+                            onBlockScreenshotsChange = { on -> scope.launch { appSettings.setBlockScreenshots(on) } },
                             onBack = { nav.popBackStack() },
                         )
                     }

@@ -88,6 +88,8 @@ fun SettingsScreen(
     appLock: Boolean,
     lockAvailable: Boolean,
     onAppLockChange: (Boolean) -> Unit,
+    blockScreenshots: Boolean,
+    onBlockScreenshotsChange: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) }
@@ -175,11 +177,19 @@ fun SettingsScreen(
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
                     SwitchRow(
                         title = "App lock",
-                        subtitle = if (lockAvailable) "Fingerprint or your screen lock to open Notes"
+                        subtitle = if (lockAvailable) "Fingerprint, face, PIN or pattern to open Notes"
                         else "Set a screen lock on your phone first",
                         checked = appLock && lockAvailable,
                         enabled = lockAvailable,
                         onChange = onAppLockChange,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Block screenshots",
+                        subtitle = "No screenshots or screen recording, and notes are hidden in recent apps",
+                        checked = blockScreenshots,
+                        enabled = true,
+                        onChange = onBlockScreenshotsChange,
                     )
                 }
                 Spacer(Modifier.height(8.dp))

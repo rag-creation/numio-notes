@@ -52,6 +52,14 @@ class AppSettings(private val context: Context) {
         context.settingsStore.edit { it[lockKey] = on }
     }
 
+    // Block screenshots (also hides the notes in the recent apps screen)
+    private val secureKey = booleanPreferencesKey("block_screenshots")
+    val blockScreenshots: Flow<Boolean> = context.settingsStore.data.map { it[secureKey] ?: false }
+
+    suspend fun setBlockScreenshots(on: Boolean) {
+        context.settingsStore.edit { it[secureKey] = on }
+    }
+
     // Notebooks you created (they show even while empty)
     private val notebooksKey = stringSetPreferencesKey("notebooks")
     val notebooks: Flow<Set<String>> = context.settingsStore.data.map { it[notebooksKey] ?: emptySet() }
