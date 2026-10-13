@@ -4,7 +4,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Numio Notes backup: one JSON file with every note (not Trash) and every notebook.
+ * Numio Notes backup (.numio): one file with every note (not Trash) and every notebook.
+ * Inside it's plain JSON, so it stays readable and open.
  * {
  *   "app": "numio-notes", "version": 1, "exportedAt": 1760000000000,
  *   "notebooks": ["Personal", "Numio"],

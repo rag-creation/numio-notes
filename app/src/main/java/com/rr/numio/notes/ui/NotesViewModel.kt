@@ -231,7 +231,7 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                                     notes += JoplinImport.readMarkdownFile(fileName(app, uri), input.readBytes().toString(Charsets.UTF_8))
                                 name.endsWith(".txt") ->
                                     notes += JoplinImport.readTextFile(fileName(app, uri), input.readBytes().toString(Charsets.UTF_8))
-                                name.endsWith(".json") -> {
+                                name.endsWith(".numio") || name.endsWith(".json") -> {
                                     val text = input.readBytes().toString(Charsets.UTF_8)
                                     if (Backup.isBackup(text)) backupText = text
                                     else KeepImport.readJson(text)?.let { notes += it }
@@ -291,7 +291,7 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                     append(".")
                 }
             }
-            _importState.value = result.getOrElse { "Couldn't read that file. It needs to be a Takeout .zip, .txt, .md or .jex file." }
+            _importState.value = result.getOrElse { "Couldn't read that file. It needs to be a .numio backup, a Takeout .zip, or a .txt, .md or .jex file." }
         }
     }
 

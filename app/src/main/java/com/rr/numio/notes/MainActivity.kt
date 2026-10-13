@@ -24,6 +24,7 @@ import com.rr.numio.notes.ui.trash.TrashScreen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,6 +79,11 @@ class MainActivity : FragmentActivity() {
         prompt.authenticate(info)
     }
 
+    private fun applySecure(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
     private fun lockAvailable(): Boolean =
         BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
 
@@ -94,11 +100,9 @@ class MainActivity : FragmentActivity() {
             val themeId by appSettings.theme.collectAsState(initial = null)
             val lockSetting by appSettings.appLock.collectAsState(initial = null)
             val blockShots by appSettings.blockScreenshots.collectAsState(initial = false)
-            // Block screenshots / screen recording when chosen in Settings
-            SideEffect {
-                if (blockShots) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            }
+            // Block screenshots / screen recording when chosen in Settings.
+            // Keyed on the value so switching it in Settings applies straight away.
+            LaunchedEffect(blockShots) { applySecure(blockShots) }
             val m = mode ?: return@setContent
             val t = themeId ?: return@setContent
             val lockOn = lockSetting ?: return@setContent
@@ -213,7 +217,10 @@ class MainActivity : FragmentActivity() {
                                 }
                             },
                             blockScreenshots = blockShots,
-                            onBlockScreenshotsChange = { on -> scope.launch { appSettings.setBlockScreenshots(on) } },
+                            onBlockScreenshotsChange = { on ->
+                                applySecure(on)
+                                scope.launch { appSettings.setBlockScreenshots(on) }
+                            },
                             onBack = { nav.popBackStack() },
                         )
                     }

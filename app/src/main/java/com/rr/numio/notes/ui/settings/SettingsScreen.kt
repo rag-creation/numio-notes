@@ -93,7 +93,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
 ) {
     val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) }
-    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) onBackup(uri)
     }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -196,7 +196,7 @@ fun SettingsScreen(
                 SectionLabel("Backup & import")
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
                     SettingRow("Back up all notes", "One file you keep somewhere safe") {
-                        backupPicker.launch("numio-notes-backup-$today.json")
+                        backupPicker.launch("Notes backup $today.numio")
                     }
                     Divider()
                     SettingRow("Restore a backup", "Adds notes from a backup file") {
