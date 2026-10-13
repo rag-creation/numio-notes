@@ -10,9 +10,22 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface NoteDao {
 
-    // Pinned notes first, then newest first
-    @Query("SELECT * FROM notes ORDER BY pinned DESC, updatedAt DESC")
+    // Notes not in Trash (sorting happens in the ViewModel)
+    @Query("SELECT * FROM notes WHERE deletedAt = 0")
     fun observeAll(): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE deletedAt > 0 ORDER BY deletedAt DESC")
+    fun observeTrash(): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE deletedAt = 0")
+    suspend fun getAll(): List<Note>
+
+    // Trash keeps notes for 30 days
+    @Query("DELETE FROM notes WHERE deletedAt > 0 AND deletedAt < :before")
+    suspend fun purgeTrash(before: Long)
+
+    @Query("DELETE FROM notes WHERE deletedAt > 0")
+    suspend fun emptyTrash()
 
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getById(id: Long): Note?

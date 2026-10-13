@@ -52,6 +52,7 @@ object KeepImport {
             plainText = if (list == null) o.optString("textContent") else null,
             checklist = list,
             pinned = o.optBoolean("isPinned"),
+            createdAt = o.optLong("createdTimestampUsec", 0L).takeIf { it > 0 }?.div(1000),
         )
     }
 }

@@ -1,7 +1,16 @@
 package com.rr.numio.notes
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import com.rr.numio.notes.ui.LockScreen
+import com.rr.numio.notes.ui.trash.TrashScreen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -27,7 +36,41 @@ import com.rr.numio.notes.ui.list.NoteListScreen
 import com.rr.numio.notes.ui.settings.SettingsScreen
 import com.rr.numio.notes.ui.theme.NotesbyNumioTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
+
+    // App lock: unlocked for this visit; locks again after a minute away
+    private var unlocked by mutableStateOf(false)
+    private var stoppedAt = 0L
+
+    override fun onStop() {
+        super.onStop()
+        stoppedAt = System.currentTimeMillis()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (stoppedAt > 0 && System.currentTimeMillis() - stoppedAt > 60_000) unlocked = false
+    }
+
+    // Fingerprint, face or the phone's PIN / pattern
+    private fun authenticate(title: String, onSuccess: () -> Unit) {
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onSuccess()
+            },
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+            .build()
+        prompt.authenticate(info)
+    }
+
+    private fun lockAvailable(): Boolean =
+        BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -36,8 +79,10 @@ class MainActivity : ComponentActivity() {
             // Wait for the saved theme (a few ms) so a light theme never flashes dark first
             val mode by appSettings.mode.collectAsState(initial = null)
             val themeId by appSettings.theme.collectAsState(initial = null)
+            val lockSetting by appSettings.appLock.collectAsState(initial = null)
             val m = mode ?: return@setContent
             val t = themeId ?: return@setContent
+            val lockOn = lockSetting ?: return@setContent
             val palette = Palettes.resolve(t, m, isSystemInDarkTheme())
             val scope = rememberCoroutineScope()
 
@@ -50,6 +95,10 @@ class MainActivity : ComponentActivity() {
             }
 
             NotesbyNumioTheme(palette) {
+                if (lockOn && lockAvailable() && !unlocked) {
+                    LockScreen(onUnlock = { authenticate("Unlock Notes") { unlocked = true } })
+                    return@NotesbyNumioTheme
+                }
                 val nav = rememberNavController()
                 val notesViewModel: NotesViewModel = viewModel()
 
@@ -110,9 +159,26 @@ class MainActivity : ComponentActivity() {
                             onThemeChange = { scope.launch { appSettings.setTheme(it) } },
                             importState = notesViewModel.importState.collectAsState().value,
                             onImport = { notesViewModel.import(it) },
-                            onImportSeen = { notesViewModel.clearImportState() },
+                            onImportSeen = { notesViewModel.clearImportState(); notesViewModel.clearBackupState() },
+                            backupState = notesViewModel.backupState.collectAsState().value,
+                            onBackup = { notesViewModel.backupTo(it) },
+                            onExport = { notesViewModel.exportMarkdownTo(it) },
+                            trashCount = notesViewModel.trash.collectAsState().value.size,
+                            onOpenTrash = { nav.navigate("trash") },
+                            appLock = lockOn,
+                            lockAvailable = lockAvailable(),
+                            onAppLockChange = { on ->
+                                // Confirm with the lock itself, both to turn it on and off
+                                authenticate(if (on) "Turn on app lock" else "Turn off app lock") {
+                                    unlocked = true
+                                    scope.launch { appSettings.setAppLock(on) }
+                                }
+                            },
                             onBack = { nav.popBackStack() },
                         )
+                    }
+                    composable("trash") {
+                        TrashScreen(viewModel = notesViewModel, onBack = { nav.popBackStack() })
                     }
                 }
             }

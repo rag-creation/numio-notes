@@ -44,9 +44,8 @@ object Share {
         context.startActivity(Intent.createChooser(intent, null))
     }
 
-    // A drawing as a PNG picture. Light page → transparent-free cream; dark page → dark.
-    fun drawing(context: Context, title: String, drawing: Drawing, darkPage: Color) {
-        if (drawing.strokes.isEmpty()) return
+    // A drawing as a picture (also used by Markdown export)
+    fun render(drawing: Drawing, darkPage: Color = Color(0xFF1A1A1A)): Bitmap {
         val w = 1440
         val h = (w * drawing.aspect).toInt().coerceIn(400, 4000)
         val image = ImageBitmap(w, h)
@@ -61,11 +60,18 @@ object Share {
                 drawPenStroke(s.points, Color(c), s.width)
             }
         }
+        return image.asAndroidBitmap()
+    }
+
+    // A drawing as a PNG picture. Light page → transparent-free cream; dark page → dark.
+    fun drawing(context: Context, title: String, drawing: Drawing, darkPage: Color) {
+        if (drawing.strokes.isEmpty()) return
+        val image = render(drawing, darkPage)
         val dir = File(context.cacheDir, "shared").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val safe = title.trim().ifEmpty { "Drawing" }.replace(Regex("[^\\p{L}\\p{N} _-]"), "").take(40).ifEmpty { "Drawing" }
         val file = File(dir, "$safe.png")
-        file.outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"

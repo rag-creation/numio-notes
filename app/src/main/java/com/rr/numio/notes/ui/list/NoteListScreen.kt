@@ -1,6 +1,7 @@
 package com.rr.numio.notes.ui.list
 
 import android.text.Html
+import com.rr.numio.notes.data.SortChoice
 import com.rr.numio.notes.ui.drawing.DrawingThumbnail
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -161,6 +162,8 @@ fun NoteListScreen(
     }
     val selectedNotes = notes.filter { it.id in selectedIds }
     var moving by remember { mutableStateOf(false) }
+    var sorting by remember { mutableStateOf(false) }
+    val sort by viewModel.sort.collectAsState()
     BackHandler(enabled = selecting) { selectedIds = emptySet() }
     fun toggleSelect(note: Note) {
         selectedIds = if (note.id in selectedIds) selectedIds - note.id else selectedIds + note.id
@@ -177,8 +180,8 @@ fun NoteListScreen(
             snackbar.currentSnackbarData?.dismiss()
             val message = if (list.size == 1) {
                 val n = list.first()
-                "\"" + n.title.ifBlank { if (n.isTodo) "To-do list" else if (n.isDrawing) "Drawing" else "Note" } + "\" deleted"
-            } else "${list.size} notes deleted"
+                "\"" + n.title.ifBlank { if (n.isTodo) "To-do list" else if (n.isDrawing) "Drawing" else "Note" } + "\" moved to Trash"
+            } else "${list.size} notes moved to Trash"
             val result = snackbar.showSnackbar(message, actionLabel = "Undo", duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) viewModel.restoreMany(list)
         }
@@ -207,6 +210,7 @@ fun NoteListScreen(
             } else if (query == null) {
                 TopBar(
                     onSearch = { query = "" },
+                    onSort = { sorting = true },
                     onLayout = { columns = if (columns == 2) 1 else 2 },
                     onSettings = onOpenSettings,
                 )
@@ -343,6 +347,10 @@ fun NoteListScreen(
                 shape = RoundedCornerShape(16.dp),
             )
         }
+    }
+
+    if (sorting) {
+        SortSheet(sort = sort, onChange = { viewModel.setSort(it) }, onDismiss = { sorting = false })
     }
 
     if (moving) {
@@ -563,7 +571,7 @@ private fun MenuPill(icon: Int, label: String, primary: Boolean = false, onClick
 }
 
 @Composable
-private fun TopBar(onSearch: () -> Unit, onLayout: () -> Unit, onSettings: () -> Unit) {
+private fun TopBar(onSearch: () -> Unit, onSort: () -> Unit, onLayout: () -> Unit, onSettings: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -583,6 +591,8 @@ private fun TopBar(onSearch: () -> Unit, onLayout: () -> Unit, onSettings: () ->
             )
         }
         RoundButton("Search", onSearch) { SearchGlyph() }
+        Spacer(Modifier.width(4.dp))
+        RoundButton("Sort", onSort) { SortGlyph() }
         Spacer(Modifier.width(4.dp))
         RoundButton("Layout", onLayout) { LayoutGlyph() }
         Spacer(Modifier.width(4.dp))
@@ -618,6 +628,97 @@ private fun SearchGlyph() {
         drawCircle(ink, radius = 6f * u, center = Offset(9.5f * u, 9.5f * u), style = Stroke(2.2f * u))
         drawLine(ink, Offset(13.8f * u, 13.8f * u), Offset(15.4f * u, 15.4f * u), strokeWidth = 1.3f * u)
         drawLine(accent, Offset(16.6f * u, 16.6f * u), Offset(20.2f * u, 20.2f * u), strokeWidth = 3.4f * u, cap = StrokeCap.Round)
+    }
+}
+
+// Sort: three lines getting shorter, the shortest in the accent
+@Composable
+private fun SortGlyph() {
+    val ink = NumioText
+    val accent = NumioYellow
+    Canvas(Modifier.size(20.dp)) {
+        val u = size.width / 24f
+        drawLine(ink, Offset(4f * u, 6f * u), Offset(20f * u, 6f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+        drawLine(ink, Offset(4f * u, 12f * u), Offset(15f * u, 12f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+        drawLine(accent, Offset(4f * u, 18f * u), Offset(10f * u, 18f * u), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
+    }
+}
+
+// Sort options, remembered
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortSheet(sort: SortChoice, onChange: (SortChoice) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = NumioCard,
+        contentColor = NumioText,
+        dragHandle = {
+            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(NumioDivider))
+        },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(start = 8.dp, end = 8.dp, bottom = 16.dp)) {
+            Text(
+                "Sort notes",
+                color = NumioText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            )
+            listOf("edited" to "Last edited", "created" to "Date created", "title" to "Title A–Z").forEach { (id, label) ->
+                val on = sort.by == id
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onChange(sort.copy(by = id)) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(20.dp).clip(CircleShape).border(2.dp, if (on) NumioYellow else NumioDivider, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (on) Box(Modifier.size(10.dp).clip(CircleShape).background(NumioYellow))
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Text(label, color = NumioText, fontSize = 16.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+                }
+            }
+            Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().height(1.dp).background(NumioDivider))
+            CheckRow("Reverse order", sort.reverse) { onChange(sort.copy(reverse = !sort.reverse)) }
+            CheckRow("Unfinished to-do lists on top", sort.todosFirst) { onChange(sort.copy(todosFirst = !sort.todosFirst)) }
+            Text(
+                "Pinned notes always stay at the top.",
+                color = NumioTextFaint,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CheckRow(label: String, checked: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(20.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (checked) NumioYellow else Color.Transparent)
+                .border(2.dp, if (checked) NumioYellow else NumioDivider, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) Icon(painterResource(R.drawable.ic_check), null, tint = NumioOnAccent, modifier = Modifier.size(13.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(label, color = NumioText, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }
 }
 

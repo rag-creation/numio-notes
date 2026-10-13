@@ -1,6 +1,8 @@
 package com.rr.numio.notes.ui.settings
 
 import android.content.Intent
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -78,9 +80,28 @@ fun SettingsScreen(
     importState: String?,
     onImport: (List<Uri>) -> Unit,
     onImportSeen: () -> Unit,
+    backupState: String?,
+    onBackup: (Uri) -> Unit,
+    onExport: (Uri) -> Unit,
+    trashCount: Int,
+    onOpenTrash: () -> Unit,
+    appLock: Boolean,
+    lockAvailable: Boolean,
+    onAppLockChange: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
-    // Pick one Joplin .jex export, or one or more .md files
+    val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) }
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) onBackup(uri)
+    }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) onExport(uri)
+    }
+    // Restore = the same picker as importing; a Numio backup file is recognised by itself
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onImport(listOf(uri))
+    }
+    // Pick files to bring in from another app
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) onImport(uris)
     }
@@ -140,16 +161,50 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                SectionLabel("Import")
+                SectionLabel("Notes")
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
+                    SettingRow(
+                        "Trash",
+                        if (trashCount == 0) "Empty · deleted notes stay here for 30 days"
+                        else (if (trashCount == 1) "1 note" else "$trashCount notes") + " · kept for 30 days",
+                        onClick = onOpenTrash,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                SectionLabel("Privacy")
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
+                    SwitchRow(
+                        title = "App lock",
+                        subtitle = if (lockAvailable) "Fingerprint or your screen lock to open Notes"
+                        else "Set a screen lock on your phone first",
+                        checked = appLock && lockAvailable,
+                        enabled = lockAvailable,
+                        onChange = onAppLockChange,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                SectionLabel("Backup & import")
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
+                    SettingRow("Back up all notes", "One file you keep somewhere safe") {
+                        backupPicker.launch("numio-notes-backup-$today.json")
+                    }
+                    Divider()
+                    SettingRow("Restore a backup", "Adds notes from a backup file") {
+                        restorePicker.launch(arrayOf("*/*"))
+                    }
+                    Divider()
                     SettingRow("Bring your notes in", "From another app or from files") {
                         choosingSource = true
                     }
+                    Divider()
+                    SettingRow("Export as Markdown", "A .zip of .md files, drawings as pictures") {
+                        exportPicker.launch("numio-notes-$today.zip")
+                    }
                 }
-                if (importState != null) {
+                (backupState ?: importState)?.let { msg ->
                     Text(
-                        importState,
-                        color = if (importState.startsWith("Imported")) NumioAccentInk else NumioTextSoft,
+                        msg,
+                        color = if (msg.endsWith("…") || msg.startsWith("Couldn't")) NumioTextSoft else NumioAccentInk,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(start = 4.dp, top = 2.dp),
                     )
@@ -329,6 +384,35 @@ private fun SettingRow(title: String, subtitle: String, value: String? = null, o
         if (value != null) {
             Text(value, color = NumioAccentInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = NumioText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = NumioTextFaint, fontSize = 12.sp)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = NumioOnAccent,
+                checkedTrackColor = NumioYellow,
+                checkedBorderColor = NumioYellow,
+                uncheckedThumbColor = NumioTextSoft,
+                uncheckedTrackColor = NumioBackground,
+                uncheckedBorderColor = NumioDivider,
+            ),
+        )
     }
 }
 

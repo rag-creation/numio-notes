@@ -19,6 +19,9 @@ data class Note(
     @ColumnInfo(defaultValue = "0") val isTodo: Boolean = false,
     // Drawing notes keep their strokes in contentHtml (see DrawingCodec)
     @ColumnInfo(defaultValue = "0") val isDrawing: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = System.currentTimeMillis(),
+    // 0 = not deleted; otherwise the time it went to Trash
+    @ColumnInfo(defaultValue = "0") val deletedAt: Long = 0,
 )
 
 data class TodoItem(val id: Long, val text: String, val done: Boolean)

@@ -85,6 +85,9 @@ dependencies {
     // Screens
     implementation(libs.androidx.navigation.compose)
 
+    // App lock (fingerprint / screen lock)
+    implementation(libs.androidx.biometric)
+
     // Rich text editor
     implementation(libs.richeditor.compose)
 

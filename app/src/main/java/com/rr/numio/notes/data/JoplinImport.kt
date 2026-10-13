@@ -12,6 +12,7 @@ data class ImportedNote(
     val plainText: String? = null,
     val checklist: List<TodoItem>? = null,
     val pinned: Boolean = false,
+    val createdAt: Long? = null,
 ) {
     val isEmpty: Boolean
         get() = title.isBlank() && markdown.isBlank() && plainText.isNullOrBlank() && checklist.isNullOrEmpty()
@@ -55,11 +56,30 @@ object JoplinImport {
                 encrypted++
                 return@mapNotNull null
             }
+            val title = item["_title"].orEmpty().trim()
+            val body = cleanMarkdown(item["_body"].orEmpty())
+            val notebook = folders[item["parent_id"]]?.trim()?.ifBlank { null } ?: "Imported"
+            val updated = parseTime(item["updated_time"]) ?: System.currentTimeMillis()
+            val created = parseTime(item["created_time"]) ?: updated
+            val checklist = when {
+                // A to-do in the other app: the title is the task; it may have a body too
+                // Its body lines become the items (ticked if the to-do was done); no body = one item
+                item["is_todo"] == "1" -> {
+                    val done = (item["todo_completed"]?.toLongOrNull() ?: 0L) > 0L
+                    val fromBody = checkboxes(body) ?: body.lines().map { it.trim().removePrefix("- ").removePrefix("* ").trim() }
+                        .filter { it.isNotBlank() }.map { TodoItem(0, it, done) }
+                    fromBody.ifEmpty { listOf(TodoItem(0, title.ifBlank { "To-do" }, done)) }
+                }
+                // A normal note that is only a checklist
+                else -> checkboxes(body)
+            }?.mapIndexed { i, t -> t.copy(id = i.toLong() + 1) }
             ImportedNote(
-                title = item["_title"].orEmpty().trim(),
-                markdown = cleanMarkdown(item["_body"].orEmpty()),
-                notebook = folders[item["parent_id"]]?.trim()?.ifBlank { null } ?: "Imported",
-                updatedAt = parseTime(item["updated_time"]) ?: System.currentTimeMillis(),
+                title = title,
+                markdown = if (checklist == null) body else "",
+                notebook = notebook,
+                updatedAt = updated,
+                checklist = checklist,
+                createdAt = created,
             )
         }
         return ImportBatch(notes, encrypted)
@@ -100,6 +120,15 @@ object JoplinImport {
             body = body.substringAfter('\n', "")
         }
         return ImportedNote(title, cleanMarkdown(body), "Imported", System.currentTimeMillis())
+    }
+
+    // "- [ ] task" / "- [x] task" lines. Returns them only if the text is nothing but checkboxes.
+    private val checkbox = Regex("^\\s*[-*+]\\s+\\[([ xX])]\\s*(.*)$")
+    private fun checkboxes(md: String): List<TodoItem>? {
+        val lines = md.lines().filter { it.isNotBlank() }
+        if (lines.isEmpty()) return null
+        val items = lines.map { checkbox.find(it) ?: return null }
+        return items.map { TodoItem(0, it.groupValues[2].trim(), it.groupValues[1] != " ") }.filter { it.text.isNotBlank() }
     }
 
     // title / body / properties, as described above
