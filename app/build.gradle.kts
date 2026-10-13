@@ -87,6 +87,8 @@ dependencies {
 
     // App lock (fingerprint / screen lock)
     implementation(libs.androidx.biometric)
+    // Newer fragment than the lock library brings; the old one crashes file pickers
+    implementation(libs.androidx.fragment.ktx)
 
     // Rich text editor
     implementation(libs.richeditor.compose)
