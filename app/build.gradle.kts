@@ -1,21 +1,11 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
 
-// Release signing is read from keystore.properties (local, never committed)
-// or from environment variables (GitHub Actions). If neither is present,
-// the release build falls back to the debug key so it still installs.
-val keystoreProps = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
-fun signingValue(key: String, env: String): String? =
-    keystoreProps.getProperty(key) ?: System.getenv(env)
-
+// Release APKs come out unsigned and are signed by hand with the Numio key,
+// so the key never leaves RR's own computer.
 android {
     namespace = "com.rr.numio.notes"
     compileSdk {
@@ -30,24 +20,21 @@ android {
         versionName = "1.0.0"
     }
 
-    signingConfigs {
-        val storePath = signingValue("storeFile", "NUMIO_KEYSTORE_PATH")
-        if (storePath != null) {
-            create("release") {
-                storeFile = file(storePath)
-                storePassword = signingValue("storePassword", "NUMIO_KEYSTORE_PASSWORD")
-                keyAlias = signingValue("keyAlias", "NUMIO_KEY_ALIAS")
-                keyPassword = signingValue("keyPassword", "NUMIO_KEY_PASSWORD")
-            }
-        }
-    }
-
     buildTypes {
         release {
+            // R8: shrinks unused library code and starts faster
             optimization {
-                enable = false
+                enable = true
             }
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+        // Test builds from GitHub: same as release (R8 on), but signed with a throwaway
+        // test key and installed next to the real app as "Notes Test".
+        create("staging") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
     compileOptions {

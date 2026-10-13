@@ -1,9 +1,10 @@
 name: Build APK
 
+# Test builds only. Real releases are built and signed on RR's own computer,
+# so the Numio signing key never goes to GitHub.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -22,26 +23,20 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Release signing: only used when the NUMIO_KEYSTORE_BASE64 secret exists.
-      # Without it the APK is signed with the runner's throwaway debug key (fine for testing).
-      - name: Load signing key
-        env:
-          KEYSTORE_B64: ${{ secrets.NUMIO_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/numio.jks"
-            echo "NUMIO_KEYSTORE_PATH=$RUNNER_TEMP/numio.jks" >> "$GITHUB_ENV"
-          fi
+      # Keep the same throwaway test key between builds, so a new test build
+      # installs over the last one (and your test notes stay).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: notes-test-key
 
-      - name: Build release APK
-        env:
-          NUMIO_KEYSTORE_PASSWORD: ${{ secrets.NUMIO_KEYSTORE_PASSWORD }}
-          NUMIO_KEY_ALIAS: ${{ secrets.NUMIO_KEY_ALIAS }}
-          NUMIO_KEY_PASSWORD: ${{ secrets.NUMIO_KEY_PASSWORD }}
+      # staging = release settings (R8 on), signed with the test key, app id ...notes.test
+      # assembleRelease too, so a problem in the real release build shows up here first.
+      - name: Build test APK
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
+          ./gradlew --no-daemon assembleStaging assembleRelease 2>&1 | tee build.log
 
       # On failure, turn the first error lines into annotations so they show on the run page.
       - name: Report build errors
@@ -53,35 +48,24 @@ jobs:
 
       - name: Name the APK
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            NAME="NotesbyNumio-${GITHUB_REF_NAME}.apk"
-          else
-            NAME="NotesbyNumio-test.apk"
-          fi
-          cp app/build/outputs/apk/release/app-release.apk "$NAME"
-          echo "APK_NAME=$NAME" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/staging/app-staging.apk NotesTest.apk
+          echo "APK_NAME=NotesTest.apk" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APK_NAME }}
-          path: ${{ env.APK_NAME }}
+          name: NotesTest.apk
+          path: NotesTest.apk
 
-      # Every push to main refreshes one "Test build" pre-release you can open on your phone.
-      - name: Publish test build
-        if: github.ref == 'refs/heads/main'
+      # The APK also goes on a draft release named "Test build" (Releases page, only you see it).
+      # A draft has no git tag, so F-Droid's update check never sees it.
+      - name: Publish test build (draft)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete test-build -y --cleanup-tag || true
-          gh release create test-build "$APK_NAME" \
-            --prerelease \
-            --target "$GITHUB_SHA" \
-            --title "Test build" \
-            --notes "Latest build from main (${GITHUB_SHA::7}). For testing only."
-
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" "$APK_NAME" --title "$APK_NAME" --generate-notes
+          for id in $(gh api repos/$GITHUB_REPOSITORY/releases --jq '.[] | select(.draft and .name == "Test build") | .id'); do
+            gh api -X DELETE repos/$GITHUB_REPOSITORY/releases/$id
+          done
+          gh release create "test-${GITHUB_SHA::7}" "$APK_NAME" --draft \
+            --target "$GITHUB_SHA" --title "Test build" \
+            --notes "Latest build from main (${GITHUB_SHA::7}). For testing only. Installs as Notes Test, next to the real app."
