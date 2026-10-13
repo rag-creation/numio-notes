@@ -1,6 +1,12 @@
 package com.rr.numio.notes.ui.editor
 
 import androidx.activity.compose.BackHandler
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
@@ -84,6 +90,8 @@ fun EditorScreen(
 ) {
     val richState = rememberRichTextState()
     val context = LocalContext.current
+    val linkInk = NumioAccentInk
+    LaunchedEffect(linkInk) { richState.config.linkColor = linkInk }
 
     // Lists: same indent for numbers and bullets so the text lines up,
     // and a little more room after "1." and "•"
@@ -225,6 +233,35 @@ fun EditorScreen(
             }
         }
 
+        // Cursor on a link (or a typed web address): a pill to open it
+        val link = linkAt(richState)
+        if (link != null) {
+            Row(
+                Modifier
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(NumioAccentSoft)
+                    .clickable {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }.onFailure { Toast.makeText(context, "No app can open this link", Toast.LENGTH_SHORT).show() }
+                    }
+                    .padding(start = 12.dp, end = 16.dp, top = 9.dp, bottom = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(painterResource(R.drawable.ic_open_link), null, tint = NumioAccentInk, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open ", color = NumioAccentInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    Uri.parse(link).host?.removePrefix("www.") ?: link,
+                    color = NumioText,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
         // Floating formatting pill
         Row(
             Modifier
@@ -299,6 +336,24 @@ private fun applyMarks(state: RichTextState, range: TextRange, wanted: Marks) {
         if (wanted.has(m) && !chars.all { it.has(m) }) state.addSpanStyle(m.spanStyle, range)
         if (!wanted.has(m) && chars.any { it.has(m) }) state.removeSpanStyle(m.spanStyle, range)
     }
+}
+
+// The web address under the cursor: a real link, or plain text that looks like one
+private val urlPattern = Regex("""(?i)\b((?:https?://|www\.)[^\s<>"]+)""")
+
+private fun linkAt(state: RichTextState): String? {
+    if (state.isLink) state.selectedLinkUrl?.let { return it }
+    val sel = state.selection
+    if (!sel.collapsed) return null
+    val text = state.annotatedString.text
+    val at = sel.min
+    urlPattern.findAll(text).forEach { m ->
+        if (at >= m.range.first && at <= m.range.last + 1) {
+            val url = m.value.trimEnd('.', ',', ')', ';', ':', '!', '?')
+            return if (url.startsWith("www.", true)) "https://$url" else url
+        }
+    }
+    return null
 }
 
 // 1. 2. 3. at the first level, then a. b. c., then i. ii. iii.
