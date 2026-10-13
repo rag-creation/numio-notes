@@ -34,7 +34,7 @@ object Share {
         send(context, listOf(title.trim(), lines).filter { it.isNotEmpty() }.joinToString("\n\n"), title)
     }
 
-    private fun send(context: Context, text: String, title: String) {
+    fun send(context: Context, text: String, title: String) {
         if (text.isBlank()) return
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"

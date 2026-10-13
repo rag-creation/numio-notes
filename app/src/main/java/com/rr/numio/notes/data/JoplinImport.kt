@@ -160,6 +160,8 @@ object JoplinImport {
         s?.takeIf { it.isNotBlank() }?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
     // Minimal tar reader: 512-byte header blocks, file data padded to 512
+    // Only note files are read into memory; attachments (PDFs, photos, videos) are skipped
+    // without loading them, so big exports don't run the phone out of memory.
     private fun readTar(input: InputStream, onFile: (String, ByteArray) -> Unit) {
         val header = ByteArray(512)
         var longName: String? = null
@@ -168,20 +170,42 @@ object JoplinImport {
             if (header.all { it.toInt() == 0 }) return // end of archive
             val name = cString(header, 0, 100)
             val prefix = cString(header, 345, 155)
-            val size = cString(header, 124, 12).trim().ifEmpty { "0" }.toLong(8)
+            val size = parseSize(header)
             val type = header[156].toInt().toChar()
-            val data = ByteArray(size.toInt())
-            if (!readFully(input, data)) return
-            val pad = ((512 - size % 512) % 512).toInt()
-            if (pad > 0) skipFully(input, pad)
+            val pad = (512 - size % 512) % 512
             val fullName = longName ?: if (prefix.isNotEmpty()) "$prefix/$name" else name
-            when (type) {
-                'L' -> { longName = String(data, Charsets.UTF_8).trimEnd('\u0000'); continue } // GNU long name
-                'x', 'g' -> continue // pax headers
-                '0', '\u0000' -> onFile(fullName, data)
+            val isNoteFile = (type == '0' || type == '\u0000') &&
+                fullName.endsWith(".md") && !fullName.contains("resources/") && size <= MAX_NOTE_BYTES
+            when {
+                type == 'L' && size <= 64 * 1024 -> {
+                    val data = ByteArray(size.toInt())
+                    if (!readFully(input, data)) return
+                    skipFully(input, pad)
+                    longName = String(data, Charsets.UTF_8).trimEnd('\u0000') // GNU long name
+                    continue
+                }
+                isNoteFile -> {
+                    val data = ByteArray(size.toInt())
+                    if (!readFully(input, data)) return
+                    skipFully(input, pad)
+                    onFile(fullName, data)
+                }
+                else -> skipFully(input, size + pad) // attachments, pax headers, folders
             }
             longName = null
         }
+    }
+
+    private const val MAX_NOTE_BYTES = 8L * 1024 * 1024
+
+    // Size is octal text, or (for very large files) binary with the top bit set
+    private fun parseSize(h: ByteArray): Long {
+        if (h[124].toInt() and 0x80 != 0) {
+            var v = 0L
+            for (i in 125 until 136) v = (v shl 8) or (h[i].toLong() and 0xFF)
+            return v
+        }
+        return cString(h, 124, 12).trim().ifEmpty { "0" }.toLongOrNull(8) ?: 0L
     }
 
     private fun cString(b: ByteArray, off: Int, len: Int): String {
@@ -200,8 +224,8 @@ object JoplinImport {
         return true
     }
 
-    private fun skipFully(input: InputStream, count: Int) {
-        var left = count.toLong()
+    private fun skipFully(input: InputStream, count: Long) {
+        var left = count
         while (left > 0) {
             val n = input.skip(left)
             if (n <= 0) { if (input.read() < 0) return; left-- } else left -= n

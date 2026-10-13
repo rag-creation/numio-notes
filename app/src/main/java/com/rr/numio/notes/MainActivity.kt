@@ -11,6 +11,15 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.rr.numio.notes.ui.LockScreen
+import com.rr.numio.notes.ui.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
+import com.rr.numio.notes.ui.theme.NumioAccentInk
+import com.rr.numio.notes.ui.theme.NumioCard
+import com.rr.numio.notes.ui.theme.NumioText
+import com.rr.numio.notes.ui.theme.NumioTextSoft
 import com.rr.numio.notes.ui.trash.TrashScreen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -76,6 +85,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val appSettings = AppSettings(applicationContext)
+        // A crash report from last time, if the app closed unexpectedly
+        val crashFile = NotesApp.crashFile(this)
+        var crashReport by mutableStateOf(runCatching { crashFile.takeIf { it.exists() }?.readText() }.getOrNull())
         setContent {
             // Wait for the saved theme (a few ms) so a light theme never flashes dark first
             val mode by appSettings.mode.collectAsState(initial = null)
@@ -102,6 +114,25 @@ class MainActivity : FragmentActivity() {
             }
 
             NotesbyNumioTheme(palette) {
+                crashReport?.let { report ->
+                    AlertDialog(
+                        onDismissRequest = { crashFile.delete(); crashReport = null },
+                        containerColor = NumioCard,
+                        titleContentColor = NumioText,
+                        textContentColor = NumioTextSoft,
+                        title = { Text("Notes closed unexpectedly", fontWeight = FontWeight.Bold) },
+                        text = { Text("Send the error report so it can be fixed? It only has the error details, none of your notes.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                Share.send(this@MainActivity, report, "Notes by Numio crash report")
+                                crashFile.delete(); crashReport = null
+                            }) { Text("Send report", color = NumioAccentInk, fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { crashFile.delete(); crashReport = null }) { Text("Not now", color = NumioTextSoft) }
+                        },
+                    )
+                }
                 if (lockOn && lockAvailable() && !unlocked) {
                     LockScreen(onUnlock = { authenticate("Unlock Notes") { unlocked = true } })
                     return@NotesbyNumioTheme
