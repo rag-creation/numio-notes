@@ -1,0 +1,33 @@
+Notes by Numio is a simple, private notes app. Everything stays on your phone: the app has no internet permission at all.
+
+<b>Write</b>
+<ul>
+<li>Rich text: bold, italic, underline, bullet and numbered lists, text alignment</li>
+<li>To-do lists you can tick right from the note list</li>
+<li>Drawing notes for sketches and signatures, shareable as a picture</li>
+<li>Open links straight from a note</li>
+</ul>
+
+<b>Organise</b>
+<ul>
+<li>Notebooks, pinned notes and search across every note</li>
+<li>Sort by last edited, date created or title</li>
+<li>Select several notes to pin, move or delete them at once</li>
+<li>Trash keeps deleted notes for 30 days</li>
+</ul>
+
+<b>Private</b>
+<ul>
+<li>App lock with fingerprint, face, PIN or pattern</li>
+<li>Option to block screenshots</li>
+<li>No internet, no ads, no tracking</li>
+</ul>
+
+<b>Your notes, your files</b>
+<ul>
+<li>Back up all notes to one .numio file and restore it any time</li>
+<li>Export everything as Markdown</li>
+<li>Bring notes in from Google Keep (Takeout), Samsung Notes text files, .jex export files, and .md or .txt files</li>
+</ul>
+
+Dark, light and palette themes that match the other Numio apps.

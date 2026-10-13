@@ -90,6 +90,7 @@ fun EditorScreen(
 ) {
     val richState = rememberRichTextState()
     val context = LocalContext.current
+    val writing by viewModel.writing.collectAsState()
     val linkInk = NumioAccentInk
     LaunchedEffect(linkInk) { richState.config.linkColor = linkInk }
 
@@ -222,11 +223,11 @@ fun EditorScreen(
             Box(Modifier.fillMaxWidth().height(1.dp).background(NumioDivider))
             Box {
                 if (richState.annotatedString.text.isEmpty()) {
-                    Text("Start writing…", color = NumioTextFaint, fontSize = 16.sp, fontFamily = NotesFont)
+                    Text("Start writing…", color = NumioTextFaint, fontSize = writing.textSp.sp, fontFamily = NotesFont)
                 }
                 BasicRichTextEditor(
                     state = richState,
-                    textStyle = TextStyle(color = NumioText, fontSize = 16.sp, lineHeight = 25.sp, fontFamily = NotesFont, fontFeatureSettings = "tnum"),
+                    textStyle = TextStyle(color = NumioText, fontSize = writing.textSp.sp, lineHeight = (writing.textSp * writing.lineFactor).sp, fontFamily = NotesFont, fontFeatureSettings = "tnum"),
                     cursorBrush = SolidColor(NumioYellow),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 )

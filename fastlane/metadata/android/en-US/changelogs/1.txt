@@ -1,0 +1,1 @@
+First release: rich text notes, to-do lists, drawings, notebooks, search, sorting, Trash, app lock, backup and restore, Markdown export, and import from other notes apps.

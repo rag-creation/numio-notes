@@ -77,6 +77,7 @@ fun TodoScreen(
 ) {
     val items = remember { mutableStateListOf<TodoItem>() }
     val context = LocalContext.current
+    val writing by viewModel.writing.collectAsState()
     var title by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var notebook by remember { mutableStateOf(viewModel.newNoteNotebook) }
@@ -178,6 +179,7 @@ fun TodoScreen(
                         onToggle = { items[index] = item.copy(done = !item.done) },
                         onTextChange = { items[index] = item.copy(text = it) },
                         onNext = { addItemAfter(index) },
+                        textSp = writing.textSp,
                         onRemove = {
                             items.removeAt(index)
                             if (items.isEmpty()) addItemAfter(-1)
@@ -222,6 +224,7 @@ private fun TodoRow(
     onTextChange: (String) -> Unit,
     onNext: () -> Unit,
     onRemove: () -> Unit,
+    textSp: Float = 16f,
 ) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(requestFocus) {
@@ -257,7 +260,7 @@ private fun TodoRow(
             singleLine = true,
             textStyle = TextStyle(
                 color = if (item.done) NumioTextFaint else NumioText,
-                fontSize = 16.sp,
+                fontSize = textSp.sp,
                 textDecoration = if (item.done) TextDecoration.LineThrough else null,
             ),
             cursorBrush = SolidColor(NumioYellow),

@@ -216,6 +216,8 @@ class MainActivity : FragmentActivity() {
                                     scope.launch { appSettings.setAppLock(on) }
                                 }
                             },
+                            writing = notesViewModel.writing.collectAsState().value,
+                            onWritingChange = { notesViewModel.setWriting(it) },
                             blockScreenshots = blockShots,
                             onBlockScreenshotsChange = { on ->
                                 applySecure(on)

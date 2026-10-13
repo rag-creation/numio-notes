@@ -293,12 +293,6 @@ fun NoteListScreen(
                 exit = fadeOut() + slideOutVertically { it / 4 },
             ) {
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    MenuPill(R.drawable.ic_mic, "Voice") {
-                        Toast.makeText(context, "Voice notes are coming soon", Toast.LENGTH_SHORT).show()
-                    }
-                    MenuPill(R.drawable.ic_camera, "Camera") {
-                        Toast.makeText(context, "Photo notes are coming soon", Toast.LENGTH_SHORT).show()
-                    }
                     MenuPill(R.drawable.ic_pen, "Drawing") {
                         menuOpen = false
                         viewModel.newNoteNotebook = selectedNotebook ?: DEFAULT_NOTEBOOK

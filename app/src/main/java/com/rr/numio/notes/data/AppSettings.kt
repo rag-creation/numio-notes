@@ -44,6 +44,20 @@ class AppSettings(private val context: Context) {
         }
     }
 
+    // Writing: text size (sp) and line spacing (× text size) for notes
+    private val textSizeKey = stringPreferencesKey("text_size")
+    private val spacingKey = stringPreferencesKey("line_spacing")
+    val writing: Flow<Writing> = context.settingsStore.data.map {
+        Writing(it[textSizeKey] ?: "normal", it[spacingKey] ?: "normal")
+    }
+
+    suspend fun setWriting(w: Writing) {
+        context.settingsStore.edit {
+            it[textSizeKey] = w.size
+            it[spacingKey] = w.spacing
+        }
+    }
+
     // App lock (fingerprint / screen lock)
     private val lockKey = booleanPreferencesKey("app_lock")
     val appLock: Flow<Boolean> = context.settingsStore.data.map { it[lockKey] ?: false }
@@ -74,3 +88,9 @@ class AppSettings(private val context: Context) {
 }
 
 data class SortChoice(val by: String = "edited", val reverse: Boolean = false, val todosFirst: Boolean = false)
+
+// size: small / normal / large / huge   spacing: compact / normal / relaxed
+data class Writing(val size: String = "normal", val spacing: String = "normal") {
+    val textSp: Float get() = when (size) { "small" -> 14f; "large" -> 18f; "huge" -> 21f; else -> 16f }
+    val lineFactor: Float get() = when (spacing) { "compact" -> 1.3f; "relaxed" -> 1.85f; else -> 1.55f }
+}

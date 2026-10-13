@@ -16,6 +16,7 @@ import androidx.lifecycle.viewModelScope
 import com.rr.numio.notes.data.AppSettings
 import com.rr.numio.notes.data.Backup
 import com.rr.numio.notes.data.SortChoice
+import com.rr.numio.notes.data.Writing
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import com.rr.numio.notes.data.Drawing
@@ -59,6 +60,14 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                 .then(ordered)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // --- Writing (text size, line spacing) ---
+    val writing: StateFlow<Writing> = settings.writing
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Writing())
+
+    fun setWriting(w: Writing) {
+        viewModelScope.launch { settings.setWriting(w) }
+    }
 
     // --- Trash ---
     val trash: StateFlow<List<Note>> = dao.observeTrash()

@@ -1,6 +1,8 @@
 package com.rr.numio.notes.ui.settings
 
 import android.content.Intent
+import com.rr.numio.notes.data.Writing
+import com.rr.numio.notes.ui.theme.NotesFont
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -90,6 +92,8 @@ fun SettingsScreen(
     onAppLockChange: (Boolean) -> Unit,
     blockScreenshots: Boolean,
     onBlockScreenshotsChange: (Boolean) -> Unit,
+    writing: Writing,
+    onWritingChange: (Writing) -> Unit,
     onBack: () -> Unit,
 ) {
     val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) }
@@ -161,6 +165,33 @@ fun SettingsScreen(
                             ThemeSwatch(p, selected = p.id == themeId) { onThemeChange(p.id) }
                         }
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                SectionLabel("Writing")
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Text size", color = NumioText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Segmented(
+                        options = listOf("small" to "Small", "normal" to "Normal", "large" to "Large", "huge" to "Huge"),
+                        selected = writing.size,
+                        onChange = { onWritingChange(writing.copy(size = it)) },
+                    )
+                    Text("Line spacing", color = NumioText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Segmented(
+                        options = listOf("compact" to "Compact", "normal" to "Normal", "relaxed" to "Relaxed"),
+                        selected = writing.spacing,
+                        onChange = { onWritingChange(writing.copy(spacing = it)) },
+                    )
+                    // Live sample
+                    Text(
+                        "The quick brown fox jumps over the lazy dog. Notes look like this.",
+                        color = NumioTextSoft,
+                        fontSize = writing.textSp.sp,
+                        lineHeight = (writing.textSp * writing.lineFactor).sp,
+                        fontFamily = NotesFont,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 SectionLabel("Notes")
@@ -393,6 +424,33 @@ private fun SettingRow(title: String, subtitle: String, value: String? = null, o
         }
         if (value != null) {
             Text(value, color = NumioAccentInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun Segmented(options: List<Pair<String, String>>, selected: String, onChange: (String) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(NumioBackground)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        options.forEach { (id, label) ->
+            val on = selected == id
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) NumioYellow else Color.Transparent)
+                    .clickable { onChange(id) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, color = if (on) NumioOnAccent else NumioTextSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
         }
     }
 }
