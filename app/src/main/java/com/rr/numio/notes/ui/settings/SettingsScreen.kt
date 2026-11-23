@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -253,6 +254,10 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 SectionLabel("About")
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(NumioCard)) {
+                    OfficialWordmark(
+                        dark = NumioCard.luminance() < 0.5f,
+                        modifier = Modifier.padding(start = 18.dp, top = 18.dp, bottom = 6.dp).height(26.dp),
+                    )
                     SettingRow("Version", "Tap for a surprise", value = version) {
                         taps++
                         val left = 7 - taps
